@@ -15,11 +15,14 @@ import os
 import time
 import json
 
-QUEUE_DURATION = 60
-NETWORK = Network.TESTNET
-MINIMUN_BALANCE = 5000000
-FUNDING_AMOUNT = 30000000
-TRANSACTION_AMOUNT = 1000000
+QUEUE_DURATION = os.environ.get('QUEUE_DURATION', 60)
+NETWORK_NAME = os.environ.get('NETWORK') if os.environ.get('NETWORK') else 'preview'
+NETWORK = Network.MAINNET if os.environ.get('NETWORK') == 'mainnet' else Network.TESTNET
+MINIMUN_BALANCE = os.environ.get('MINIMUN_BALANCE', 5000000)
+FUNDING_AMOUNT = os.environ.get('FUNDING_AMOUNT', 30000000)
+TRANSACTION_AMOUNT = os.environ.get('TRANSACTION_AMOUNT', 1000000)
+BLOCKFROST_API_URL = os.environ.get('BLOCKFROST_API_URL') if os.environ.get('BLOCKFROST_API_URL') else ApiUrls[NETWORK_NAME].value
+#FUNDING_ADDRESS_CBORHEX = Address.from_primitive(os.environ.get('FUNDING_ADDRESS')).to_cbor() if os.environ.get('FUNDING_ADDRESS') else os.environ.get('FUNDING_ADDRESS_CBORHEX')
 MIN_BLOCK_CONFIRMATIONS = 3
 
 class Cardano:
@@ -43,16 +46,13 @@ class Cardano:
         self.name = name
         self.pendingKEL = {}
         self.timer = Timer(QUEUE_DURATION, self.flushQueue)
-        try:
-            blockfrostProjectId=os.environ['BLOCKFROST_API_KEY']
-        except KeyError:
-            print("Environment variable BLOCKFROST_API_KEY not set")
-            exit(1)
+        # BLOCKFROST_API_KEY can be empty for blockfrost-ryo instances
+        blockfrostProjectId=os.environ.get('BLOCKFROST_API_KEY', '')
         self.api = BlockFrostApi(
             project_id=blockfrostProjectId,
-            base_url=ApiUrls.preview.value
+            base_url=BLOCKFROST_API_URL
             )
-        self.context = BlockFrostChainContext(blockfrostProjectId,NETWORK, ApiUrls.preview.value)
+        self.context = BlockFrostChainContext(blockfrostProjectId, NETWORK, BLOCKFROST_API_URL)
 
         # retrieve backer private key and derive cardano address
         backerPrivateKey = ks.pris.get(hab.kever.prefixer.qb64).raw
@@ -130,7 +130,7 @@ class Cardano:
 
     def fundAddress(self, addr):
         try:
-            funding_payment_signing_key = PaymentSigningKey.from_cbor(os.environ["FUNDING_ADDRESS_CBORHEX"])
+            funding_payment_signing_key = PaymentSigningKey.from_cbor(os.environ.get('FUNDING_ADDRESS_CBORHEX'))
             funding_payment_verification_key = PaymentVerificationKey.from_signing_key(funding_payment_signing_key)
             funding_addr = Address(funding_payment_verification_key.hash(), None, network=NETWORK)
         except KeyError:
@@ -177,7 +177,7 @@ def getInfo(alias, hab, ks):
         exit(1)
     api = BlockFrostApi(
         project_id=blockfrostProjectId,
-        base_url=ApiUrls.preview.value
+        base_url=BLOCKFROST_API_URL
         )
     backerPrivateKey = ks.pris.get(hab.kever.prefixer.qb64).raw
     payment_signing_key = PaymentSigningKey(backerPrivateKey,"PaymentSigningKeyShelley_ed25519","PaymentSigningKeyShelley_ed25519")
@@ -191,7 +191,7 @@ def getInfo(alias, hab, ks):
 
 
     try:
-        funding_payment_signing_key = PaymentSigningKey.from_cbor(os.environ.get("FUNDING_ADDRESS_CBORHEX"))
+        funding_payment_signing_key = PaymentSigningKey.from_cbor(os.environ.get('FUNDING_ADDRESS_CBORHEX'))
         funding_payment_verification_key = PaymentVerificationKey.from_signing_key(funding_payment_signing_key)
         funding_addr = Address(funding_payment_verification_key.hash(), None, network=NETWORK).encode()
         f_address = api.address(address=funding_addr)
@@ -216,7 +216,7 @@ def queryBlockchain(prefix, hab,ks):
         exit(1)
     api = BlockFrostApi(
         project_id=blockfrostProjectId,
-        base_url=ApiUrls.preview.value
+        base_url=BLOCKFROST_API_URL
         )
     backerPrivateKey = ks.pris.get(hab.kever.prefixer.qb64).raw
     payment_signing_key = PaymentSigningKey(backerPrivateKey,"PaymentSigningKeyShelley_ed25519","PaymentSigningKeyShelley_ed25519")
