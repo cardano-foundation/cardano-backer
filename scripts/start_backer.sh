@@ -1,6 +1,9 @@
+#!/bin/bash
+
 CONFIG_DIR="${BACKER_CONFIG_DIR:-$(pwd)}"
 STORE_DIR="${BACKER_STORE_DIR:-$(pwd)/store}"
-URL="${BACKER_URL:-http://127.0.0.1}"
+HOST=${BACKER_HOST:-localhost}
+URL="${BACKER_URL:-http://$BACKER_HOST}"
 PORT="${BACKER_PORT:-5666}"
 if [[ -z "${BACKER_SALT}" ]]; then
   SALT=""

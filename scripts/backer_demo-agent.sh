@@ -4,8 +4,10 @@
 # 2. Run start_agent.sh  in a second terminal
 # 3. Run this script in a third terminal passing two parameters: backer's prefix and backer's cardano address
 
-AGENT_URL=${AGENT_URL:-http://localhost:5972}
-BACKER_URL=${BACKER_URL:-http://localhost:5666}
+AGENT_HOST=${AGENT_HOST:-localhost}
+BACKER_HOST=${BACKER_HOST:-cardano-backer}
+AGENT_URL=${AGENT_URL:-http://$AGENT_HOST:5972}
+BACKER_URL=${BACKER_URL:-http://$BACKER_HOST:5666}
 
 curl -s -X POST "${AGENT_URL}/boot" -H "accept: */*" -H "Content-Type: application/json" -d "{\"name\":\"rootsagent\",\"passcode\":\"6jiSnnltcxQbxqiaQuLor\"}" | jq
 
