@@ -21,9 +21,7 @@ ENTRYPOINT ["keri"]
 
 FROM kli AS cardano-base
 
-ENV BACKER_CONFIG_FILE /config/witroot-config.json
-ENV AGENT_CONFIG_FILE /config/agent-config.json
-ENV WITROOTS_CONFIG_DIR /usr/local/var/keri/cardano-roots
+ENV CONFIG_DIR /usr/local/var/keri
 RUN pip install blockfrost-python~=0.5.2 pycardano~=0.7.3
 RUN mkdir /config && \
     ln -s /src/scripts/demo/backer/start_backer.sh /usr/local/bin/cardano-backer && \
