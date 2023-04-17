@@ -34,4 +34,5 @@ VOLUME /usr/local/var/keri
 ENTRYPOINT ["/usr/local/bin/cardano-backer"]
 
 FROM cardano-base AS cardano-agent
+RUN apt update -qq && apt install -y jq
 ENTRYPOINT ["/usr/local/bin/cardano-agent"]
