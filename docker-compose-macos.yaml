@@ -1,0 +1,40 @@
+version: '3.9'
+
+volumes:
+  keri-data:
+
+services:
+  cardano-backer:
+    restart: unless-stopped
+    platform: linux/amd64
+    build:
+      x-bake:
+        platforms:
+          - linux/amd64
+      context: .
+      target: cardano-backer
+    env_file: .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - keri-data:/usr/local/var/keri
+    ports:
+      - 5665:5665
+      - 5666:5666 
+  cardano-agent:
+    restart: unless-stopped
+    platform: linux/amd64
+    build:
+      x-bake:
+        platforms:
+          - linux/amd64
+      context: .
+      target: cardano-agent
+    env_file: .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - keri-data:/usr/local/var/keri
+    ports:
+      - 5971:5971
+      - 5972:5972 
