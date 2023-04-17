@@ -26,15 +26,10 @@ docker run -it --rm \
   keripy/cardano-backer \
   /src/scripts/demo/backer/generate_cborhex_cardano.py
 ```
-* Write an `.env` file in the root of the git repository and set the `FUNDING_ADDRESS_CBORHEX` using the value from the previous command:
-```
-NETWORK=preview
-BLOCKFROST_API_KEY=_CHANGE_ME_
-FUNDING_ADDRESS_CBORHEX=_CHANGE_ME_
-```
+* Setup an `.env` file (you can use `.env.example` file as template) in the root of the git repository and set the `FUNDING_ADDRESS_CBORHEX` using the value from the previous command
 * Bring up `cardano-backer` and `cardano-agent`:
 ```
-docker-compose up
+docker-compose --env-file .env up
 ```
 
 At this point services should be accesible at these endpoints:
