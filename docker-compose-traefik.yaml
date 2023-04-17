@@ -1,0 +1,63 @@
+version: '3.9'
+
+volumes:
+  keri-data:
+
+services:
+  cardano-backer:
+    restart: unless-stopped
+    build:
+      context: .
+      target: cardano-backer
+    env_file: .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - keri-data:/usr/local/var/keri
+    ports:
+      - 5665:5665
+      - 5666:5666 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backer.rule=Host(`${BACKER_HOST:-cardano-backer}`)"
+      - "traefik.http.routers.backer.entrypoints=websecure"
+      - "traefik.http.routers.backer.tls.certresolver=myresolver"
+      - "traefik.http.services.backer.loadbalancer.server.port=5666"
+  cardano-agent:
+    restart: unless-stopped
+    build:
+      context: .
+      target: cardano-agent
+    env_file: .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - keri-data:/usr/local/var/keri
+    ports:
+      - 5971:5971
+      - 5972:5972 
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.agent.rule=Host(`${AGENT_HOST:-cardano-agent}`)"
+      - "traefik.http.routers.agent.entrypoints=websecure"
+      - "traefik.http.routers.agent.tls.certresolver=myresolver"
+      - "traefik.http.services.agent.loadbalancer.server.port=5972"
+
+  traefik:
+    image: "traefik:v2.9"
+    container_name: "traefik"
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.websecure.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=cf-web3-team-integrations@cardanofoundation.org"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - "./letsencrypt:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
