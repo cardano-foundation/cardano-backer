@@ -135,8 +135,16 @@ class Cardano:
         except KeyError:
             print("Backer address could not be funded. Environment variable FUNDING_ADDRESS_CBORHEX is not set")
             return
+        try:
 
-        funding_balance = self.api.address(address=funding_addr.encode()).amount[0]
+            funding_balance = self.api.address(address=funding_addr.encode()).amount[0]
+        except ApiError as e:
+            if e.status_code == 404:
+                print("Empty balance to fund backer")
+            else:
+                print("Blockfrost API error:",e.message)
+            return
+            
         print("Funding address:", funding_addr)
         print("Funding balance:", int(funding_balance.quantity)/1000000,"ADA")
         if int(funding_balance.quantity) > (FUNDING_AMOUNT + 1000000):
