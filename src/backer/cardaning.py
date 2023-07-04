@@ -136,8 +136,9 @@ class Cardano:
             print("Backer address could not be funded. Environment variable FUNDING_ADDRESS_CBORHEX is not set")
             return
         try:
-
-            funding_balance = self.api.address(address=funding_addr.encode()).amount[0]
+            fund_addr = funding_addr.encode()
+            resp = self.api.address(address=fund_addr)
+            funding_balance = resp.amount[0]
         except ApiError as e:
             if e.status_code == 404:
                 print("Empty balance to fund backer")
