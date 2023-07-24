@@ -21,6 +21,7 @@ NETWORK = Network.TESTNET
 MINIMUN_BALANCE = 5000000
 FUNDING_AMOUNT = 30000000
 TRANSACTION_AMOUNT = 1000000
+MIN_BLOCK_CONFIRMATIONS = 3
 
 class Cardano:
     """
@@ -224,6 +225,9 @@ def queryBlockchain(prefix, hab,ks):
 
     txs = api.address_transactions(spending_addr.encode())
     for tx in txs:
+        block_height = tx["block_height"]
+        latest_block = api.block_latest()
+        if latest_block.height - block_height < MIN_BLOCK_CONFIRMATIONS: continue
         tx_detail = api.transaction(tx.tx_hash)
         meta = api.transaction_metadata(tx.tx_hash, return_type='json')
         if meta:
