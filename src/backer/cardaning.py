@@ -9,7 +9,6 @@ Registrar Backer operations on Cardano Ledger
 
 from blockfrost import BlockFrostApi, ApiError, ApiUrls
 from pycardano import * 
-from textwrap import wrap
 from threading import Timer
 from  pprint import pp
 import os
@@ -74,7 +73,8 @@ class Cardano:
         seq_no = int(event['ked']['s'],16)
         prefix = event['ked']['i']
         if not prefix in self.pendingKEL: self.pendingKEL[prefix] = {}
-        self.pendingKEL[prefix][seq_no] = wrap(json.dumps(event), 64)
+        string_event = json.dumps(event, separators=(',', ':'),ensure_ascii=False)
+        self.pendingKEL[prefix][seq_no] = [string_event[i:i+64] for i in range(0, len(string_event), 64)]
         if not self.timer.is_alive():
             self.timer = Timer(90, self.flushQueue)
             self.timer.start()
