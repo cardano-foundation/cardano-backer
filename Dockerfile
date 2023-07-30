@@ -1,15 +1,15 @@
 FROM python:3.10 AS base
 
 WORKDIR /src
-COPY ./ /src
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
-
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 RUN apt update -qq && \
-    apt install -y libsodium23 && \
-    pip3 install -r requirements.txt
+    apt install -y libsodium23
+
+COPY ./ /src
+RUN pip3 install -r requirements.txt
 
 # kli binary image
 FROM base AS kli

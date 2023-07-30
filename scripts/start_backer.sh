@@ -15,7 +15,7 @@ mkdir -p $CONFIG_DIR/keri/cf
 echo '{
     "backer": {
       "dt": "'$(date -u +"%Y-%m-%dT%H:%M:%S.000000+00:00")'",
-      "curls": ["tcp://localhost:5665/", "http://localhost:5665", "tcp://cardano-backer:5666", "http://cardano-backer:5666", "tcp://'$HOST':'$PORT'/", "'$URL':'$PORT'/"]
+      "curls": ["tcp://'$HOST':'$PORT'/", "'$URL':'$PORT'/"]
     },
     "dt": "'$(date -u +"%Y-%m-%dT%H:%M:%S.000000+00:00")'",
     "iurls": [
