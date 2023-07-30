@@ -64,8 +64,4 @@ This environmental variable is used by `start_backer.sh` script that passes it t
 
 
 ## Docker
-```
-docker build -f ./Dockerfile .  -t cardano-backer   // use --platform=linux/amd64 if needed
-docker run -i -t -p 5666:5666 -e BLOCKFROST_API_KEY={API KEY} cardano-backer
-```
-
+See [DOCKER.md](docker.md) for instructions on how to deploy using Docker.
