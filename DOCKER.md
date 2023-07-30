@@ -24,7 +24,7 @@ done
 docker run -it --rm \
   --entrypoint=python \
   keripy/cardano-backer \
-  /src/scripts/demo/backer/generate_cborhex_cardano.py
+  /src/scripts/generate_funding_cborhex_cardano.py
 ```
 * Setup an `.env` file (you can use `.env.example` file as template) in the root of the git repository and set the `FUNDING_ADDRESS_CBORHEX` using the value from the previous command
 * Bring up `cardano-backer` and `cardano-agent`:
@@ -41,11 +41,11 @@ If you want to run the demo scripts, you can run them by executing this snippet 
 * `backer_demo-kli.sh`:
 ```
 docker-compose exec cardano-backer bash \
-  /src/scripts/demo/backer/backer_demo-kli.sh $BACKER_PREFIX $BACKER_ADDRESS
+  /src/scripts/backer_demo-kli.sh $BACKER_PREFIX $BACKER_ADDRESS
 ```
 * `backer_demo-agent.sh`:
 ```
 docker-compose exec cardano-agent bash -c '\
   BACKER_URL=http://cardano-backer:5666; \
-  /src/scripts/demo/backer/backer_demo-agent.sh $BACKER_PREFIX $BACKER_ADDRESS'
+  /src/scripts/backer_demo-agent.sh $BACKER_PREFIX $BACKER_ADDRESS'
 ```
