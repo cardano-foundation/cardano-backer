@@ -22,7 +22,6 @@ MINIMUN_BALANCE = os.environ.get('MINIMUN_BALANCE', 5000000)
 FUNDING_AMOUNT = os.environ.get('FUNDING_AMOUNT', 30000000)
 TRANSACTION_AMOUNT = os.environ.get('TRANSACTION_AMOUNT', 1000000)
 BLOCKFROST_API_URL = os.environ.get('BLOCKFROST_API_URL') if os.environ.get('BLOCKFROST_API_URL') else ApiUrls[NETWORK_NAME].value
-#FUNDING_ADDRESS_CBORHEX = Address.from_primitive(os.environ.get('FUNDING_ADDRESS')).to_cbor() if os.environ.get('FUNDING_ADDRESS') else os.environ.get('FUNDING_ADDRESS_CBORHEX')
 MIN_BLOCK_CONFIRMATIONS = 3
 
 class Cardano:
