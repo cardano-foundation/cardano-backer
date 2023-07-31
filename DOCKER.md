@@ -49,3 +49,8 @@ docker-compose exec cardano-agent bash -c '\
   BACKER_URL=http://cardano-backer:5666; \
   /src/scripts/backer_demo-agent.sh $BACKER_PREFIX $BACKER_ADDRESS'
 ```
+
+# Production deployment
+
+Edit `docker-compose-traefik.yaml` to deploy on a machine using a domain.
+`BACKER_EXTERNAL_HOST` can remain as `localhost` (default) as traefik can handle the routing externally.
