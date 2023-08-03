@@ -1,6 +1,10 @@
+#!/bin/bash
+
 CONFIG_DIR="${BACKER_CONFIG_DIR:-$(pwd)}"
 STORE_DIR="${BACKER_STORE_DIR:-$(pwd)/store}"
-URL="${BACKER_URL:-http://127.0.0.1}"
+INTERNAL_HOST=${BACKER_INTERNAL_HOST:-localhost}
+EXTERNAL_HOST=${BACKER_EXTERNAL_HOST:-localhost}
+URL="${BACKER_URL:-http://$EXTERNAL_HOST}"
 PORT="${BACKER_PORT:-5666}"
 if [[ -z "${BACKER_SALT}" ]]; then
   SALT=""
@@ -9,24 +13,28 @@ else
 fi
 
 mkdir -p $CONFIG_DIR/keri/cf
-echo '{
-    "backer": {
-      "dt": "'$(date -u +"%Y-%m-%dT%H:%M:%S.000000+00:00")'",
-      "curls": ["'$URL':'$PORT'/"]
-    },
-    "dt": "'$(date -u +"%Y-%m-%dT%H:%M:%S.000000+00:00")'",
-    "iurls": [
-    ]
-  }
-  ' > $CONFIG_DIR/keri/cf/backer.json
-echo '{
-    "transferable": false,
-    "wits": [],
-    "icount": 1,
-    "ncount": 1,
-    "isith": "1",
-    "nsith": "1"
-  }' > $CONFIG_DIR/backer_cfg.json
+cat > $CONFIG_DIR/keri/cf/backer.json <<EOF
+{
+  "backer": {
+    "dt": "$(date -u +"%Y-%m-%dT%H:%M:%S.000000+00:00")",
+    "curls": ["tcp://${INTERNAL_HOST}:$((PORT-1))/", "${URL}:${PORT}"]
+  },
+  "dt": "$(date -u +"%Y-%m-%dT%H:%M:%S.000000+00:00")",
+  "iurls": [
+  ]
+}
+EOF
+
+cat > $CONFIG_DIR/backer_cfg.json <<EOF
+{
+  "transferable": false,
+  "wits": [],
+  "icount": 1,
+  "ncount": 1,
+  "isith": "1",
+  "nsith": "1"
+}
+EOF
 
 kli init --name backer --nopasscode  --config-dir $CONFIG_DIR --config-file backer --base $STORE_DIR $SALT
 

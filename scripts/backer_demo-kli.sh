@@ -3,8 +3,8 @@
 # 2. Run this script in a second terminal passing two parameters: backer's prefix and backer's cardano address
 
 # replace $(pwd) with the folder of your choice
-CONFIG_DIR=$(pwd)
-STORE_DIR=$(pwd)/store
+CONFIG_DIR=${CONFIG_DIR:-$PWD}
+STORE_DIR=${CONFIG_DIR}/store
 
 function isSuccess() {
     ret=$?
