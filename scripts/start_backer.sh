@@ -6,6 +6,7 @@ INTERNAL_HOST=${BACKER_INTERNAL_HOST:-localhost}
 EXTERNAL_HOST=${BACKER_EXTERNAL_HOST:-localhost}
 URL="${BACKER_URL:-http://$EXTERNAL_HOST}"
 PORT="${BACKER_PORT:-5666}"
+TPORT="${BACKER_TPORT:-5665}"
 if [[ -z "${BACKER_SALT}" ]]; then
   SALT=""
 else
@@ -40,4 +41,4 @@ kli init --name backer --nopasscode  --config-dir $CONFIG_DIR --config-file back
 
 kli incept --name backer --alias backer --config $CONFIG_DIR --file backer_cfg.json --base $STORE_DIR 
 
-backer start --name backer  --alias backer -H $PORT --ledger cardano --base $STORE_DIR 
+backer start --name backer  --alias backer -T $TPORT -H $PORT --ledger cardano --base $STORE_DIR 

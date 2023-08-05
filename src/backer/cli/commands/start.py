@@ -25,11 +25,11 @@ parser.add_argument('-V', '--version',
 parser.add_argument('-H', '--http',
                     action='store',
                     default=5631,
-                    help="Local port number the HTTP server listens on. Default is 5631.")
+                    help="Local port number the HTTP server listens on. Default is 5666.")
 parser.add_argument('-T', '--tcp',
                     action='store',
                     default=5632,
-                    help="Local port number the TCP server listens on. Default is 5632.")
+                    help="Local port number the TCP server listens on. Default is 5665.")
 parser.add_argument('-n', '--name',
                     action='store',
                     default="backer",
@@ -63,7 +63,7 @@ def launch(args):
                 ".******\n\n", args.name, args.http, args.tcp)
 
 
-def runBacker(name="backer", base="", alias="backer", bran="", tcp=5631, http=5632, expire=0.0, ledger=None):
+def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=5666, expire=0.0, ledger=None):
     """
     Setup and run one backer
     """
