@@ -8,6 +8,7 @@ class to support registrar backers
 
 import falcon
 import time
+import re
 
 from hio.base import doing
 from hio.core import http
@@ -473,7 +474,14 @@ class ReceiptEnd(doing.DoDoer):
             if self.ledger:
                 try:
                     event = eventing.loadEvent(self.hab.db, pre, serder.saidb)
-                    self.ledger.publishEvent(event)
+
+                    # KEL will push to on-chain icpMessage-controllerSig-witnessSig
+                    # parse witnessSig
+                    data = crt.decode()
+                    find_witness_sig = re.search("\}\-([A-z0-9\_\-]+)", data)
+                    if find_witness_sig:
+                        witness_sig = find_witness_sig.group(1)
+                    self.ledger.publishEventv2(msg.extend(witness_sig.encode()))
                     
                 except Exception as e:
                     logger.error(f"ledger error: {e}")

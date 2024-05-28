@@ -44,6 +44,7 @@ class Cardano:
     def __init__(self, name='backer', hab=None, ks=None):
         self.name = name
         self.pendingKEL = {}
+        self.pending_kel = None
         self.timer = Timer(QUEUE_DURATION, self.flushQueue)
         # BLOCKFROST_API_KEY can be empty for blockfrost-ryo instances
         blockfrostProjectId=os.environ.get('BLOCKFROST_API_KEY', '')
@@ -119,6 +120,22 @@ class Cardano:
             for k in kels_to_remove: del self.pendingKEL[k]
             self.timer = Timer(90, self.flushQueue)
             self.timer.start()
+
+    def publishEventv2(self, event: bytearray):
+        """
+        {'ked': {'v': 'KERI10JSON000159_', 't': 'icp', 'd': 'ECIxUvrvQvzMW5xadRO0MbwYIpubWuIELZ6-U-xX1_xF', 'i': 'ECIxUvrvQvzMW5xadRO0MbwYIpubWuIELZ6-U-xX1_xF', 's': '0', 'kt': '1', 'k': ['DN1z33973Un9KG0VDAEIB_Xl1kmvq1etM9vUzMuRW4pY'], 'nt': '1', 'n': ['EPPUH7YlDn4NfxJGEILd3mcPZQLLOqmy8zztT_479ie6'], 'bt': '1', 'b': ['BNQD5TjeYWEpSGmTWNGHa_Nbw811wra0R190icmo4w9p'], 'c': [], 'a': []}, 'stored': True, 'signatures': [{'index': 0, 'signature': 'AACAVf-hcX8lAczMlYJp9rMirDXDThpYfHS85cFoGBHp-Y_RYoxDITdglXcYW6uleVB431aP49OwJt2-GHO9zhcM'}], 'witnesses': ['BNQD5TjeYWEpSGmTWNGHa_Nbw811wra0R190icmo4w9p'], 'witness_signatures': [{'index': 0, 'signature': 'AACvASREIgItmGTbTSBRcnbfaocUqXH9F19NMFiELHt80-GgenfpGF1CpvkDPoJpIcKdMnSQ0S7BlqorvC1b8X8P'}], 'receipts': {}, 'timestamp': '2024-05-28T07:39:21.918755+00:00'}-controlerSig-witnessSig
+
+        icpMessage>-<controllerSig-<witnessSig>
+        """
+        print("Adding event to queue", event['ked']['s'],event['ked']['t'])
+        print(f"event {event}")
+        self.pending_kel = event
+        if not self.timer.is_alive():
+            self.timer = Timer(90, self.flushQueue)
+            self.timer.start()
+
+    def flushQueueV2(self):
+        pass
 
     def getaddressBalance(self):
         try:
