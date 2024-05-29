@@ -122,19 +122,65 @@ class Cardano:
             self.timer.start()
 
     def publishEventv2(self, event: bytearray):
-        """
-        {'ked': {'v': 'KERI10JSON000159_', 't': 'icp', 'd': 'ECIxUvrvQvzMW5xadRO0MbwYIpubWuIELZ6-U-xX1_xF', 'i': 'ECIxUvrvQvzMW5xadRO0MbwYIpubWuIELZ6-U-xX1_xF', 's': '0', 'kt': '1', 'k': ['DN1z33973Un9KG0VDAEIB_Xl1kmvq1etM9vUzMuRW4pY'], 'nt': '1', 'n': ['EPPUH7YlDn4NfxJGEILd3mcPZQLLOqmy8zztT_479ie6'], 'bt': '1', 'b': ['BNQD5TjeYWEpSGmTWNGHa_Nbw811wra0R190icmo4w9p'], 'c': [], 'a': []}, 'stored': True, 'signatures': [{'index': 0, 'signature': 'AACAVf-hcX8lAczMlYJp9rMirDXDThpYfHS85cFoGBHp-Y_RYoxDITdglXcYW6uleVB431aP49OwJt2-GHO9zhcM'}], 'witnesses': ['BNQD5TjeYWEpSGmTWNGHa_Nbw811wra0R190icmo4w9p'], 'witness_signatures': [{'index': 0, 'signature': 'AACvASREIgItmGTbTSBRcnbfaocUqXH9F19NMFiELHt80-GgenfpGF1CpvkDPoJpIcKdMnSQ0S7BlqorvC1b8X8P'}], 'receipts': {}, 'timestamp': '2024-05-28T07:39:21.918755+00:00'}-controlerSig-witnessSig
-
-        icpMessage>-<controllerSig-<witnessSig>
-        """
-        print(f"event {event}")
+        # todo: Remove with hack
         self.pending_kel = event
+        # self.flushQueueV2() <= hack
         if not self.timer.is_alive():
             self.timer = Timer(90, self.flushQueue)
             self.timer.start()
 
+
     def flushQueueV2(self):
-        pass
+        # todo: Remove with hack
+        print("Flushing Queue V2")
+        try:
+            txs = self.api.address_transactions(self.spending_addr)
+            utxos = self.api.address_utxos(self.spending_addr.encode())
+            kels_to_remove = []
+            # Build transaction
+            builder = TransactionBuilder(self.context)
+            utxo_sum = 0
+            utxo_to_remove = []
+            for u in utxos:
+                utxo_sum = utxo_sum + int(u.amount[0].quantity)
+                builder.add_input(
+                    UTxO(
+                        TransactionInput.from_primitive(
+                            [u.tx_hash, u.tx_index]
+                        ),
+                        TransactionOutput(
+                            address=Address.from_primitive(u.address),
+                            amount=int(u.amount[0].quantity))
+                    )
+                )
+                utxo_to_remove.append(u)
+                if utxo_sum > (TRANSACTION_AMOUNT + 2000000):
+                    break
+
+            for ur in utxo_to_remove:
+                utxos.remove(ur)
+
+            builder.add_output(TransactionOutput(self.spending_addr, Value.from_primitive([TRANSACTION_AMOUNT])))
+
+            builder = TransactionBuilder(self.context)
+
+            # Chunk size
+            # bytearrays is not accept
+            self.pending_kel = bytes(self.pending_kel)
+            value = [self.pending_kel[i:i + 64] for i in range(0, len(self.pending_kel), 64)]
+
+            # Metadata. accept int key type
+            builder.auxiliary_data = AuxiliaryData(Metadata({1: value}))
+
+            # Encouter with err issue
+            signed_tx = builder.build_and_sign([self.payment_signing_key], change_address=self.spending_addr)
+            # Submit transaction
+            self.context.submit_tx(signed_tx.to_cbor())
+        except Exception as e:
+            # self.flushQueueV2() <= hack
+
+            self.timer = Timer(90, self.flushQueueV2)
+            self.timer.start()
 
     def getaddressBalance(self):
         try:
