@@ -127,7 +127,6 @@ class Cardano:
 
         icpMessage>-<controllerSig-<witnessSig>
         """
-        print("Adding event to queue", event['ked']['s'],event['ked']['t'])
         print(f"event {event}")
         self.pending_kel = event
         if not self.timer.is_alive():

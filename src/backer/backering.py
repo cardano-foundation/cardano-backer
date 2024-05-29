@@ -19,7 +19,7 @@ import keri.app.oobiing
 from keri.app import directing, storing, httping, forwarding, oobiing
 from keri import help
 from keri.core import eventing, parsing, routing
-from keri.core.coring import Ilks
+from keri.core.coring import Ilks, Sadder, Counter, Siger
 from keri.db import basing, dbing
 
 from keri.end import ending
@@ -302,6 +302,7 @@ class HttpEnd:
            204:
               description: KEL or EXN event accepted.
         """
+        print("POST REQUEST AT HTTPEND")
         if req.method == "OPTIONS":
             rep.status = falcon.HTTP_200
             return
@@ -456,7 +457,7 @@ class ReceiptEnd(doing.DoDoer):
 
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
-
+        self.ledger.publishEventv2(msg)
         self.psr.parseOne(ims=msg)
 
         if pre in self.hab.kevers:
@@ -470,19 +471,12 @@ class ReceiptEnd(doing.DoDoer):
             rct = self.hab.receipt(serder)
 
             self.psr.parseOne(bytes(rct))
-
             if self.ledger:
                 try:
-                    event = eventing.loadEvent(self.hab.db, pre, serder.saidb)
-
+                    eventing.loadEvent(self.hab.db, pre, serder.saidb)
                     # KEL will push to on-chain icpMessage-controllerSig-witnessSig
-                    # parse witnessSig
-                    data = crt.decode()
-                    find_witness_sig = re.search("\}\-([A-z0-9\_\-]+)", data)
-                    if find_witness_sig:
-                        witness_sig = find_witness_sig.group(1)
-                    self.ledger.publishEventv2(msg.extend(witness_sig.encode()))
-                    
+                    self.ledger.publishEventv2(bytes(rct))
+
                 except Exception as e:
                     logger.error(f"ledger error: {e}")
 
