@@ -459,7 +459,6 @@ class ReceiptEnd(doing.DoDoer):
         msg.extend(cr.attachments.encode("utf-8"))
         self.ledger.publishEventv2(msg)
         self.psr.parseOne(ims=msg)
-
         if pre in self.hab.kevers:
             kever = self.hab.kevers[pre]
             wits = kever.wits
@@ -473,7 +472,6 @@ class ReceiptEnd(doing.DoDoer):
             self.psr.parseOne(bytes(rct))
             if self.ledger:
                 try:
-                    eventing.loadEvent(self.hab.db, pre, serder.saidb)
                     # KEL will push to on-chain icpMessage-controllerSig-witnessSig
                     self.ledger.publishEventv2(bytes(rct))
 

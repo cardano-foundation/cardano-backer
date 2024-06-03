@@ -122,47 +122,21 @@ class Cardano:
             self.timer.start()
 
     def publishEventv2(self, event: bytearray):
-        # todo: Remove with hack
         self.pending_kel = event
-        # self.flushQueueV2() <= hack
         if not self.timer.is_alive():
             self.timer = Timer(90, self.flushQueue)
             self.timer.start()
 
 
     def flushQueueV2(self):
-        # todo: Remove with hack
-        print("Flushing Queue V2")
         try:
             txs = self.api.address_transactions(self.spending_addr)
             utxos = self.api.address_utxos(self.spending_addr.encode())
             kels_to_remove = []
             # Build transaction
             builder = TransactionBuilder(self.context)
-            utxo_sum = 0
-            utxo_to_remove = []
-            for u in utxos:
-                utxo_sum = utxo_sum + int(u.amount[0].quantity)
-                builder.add_input(
-                    UTxO(
-                        TransactionInput.from_primitive(
-                            [u.tx_hash, u.tx_index]
-                        ),
-                        TransactionOutput(
-                            address=Address.from_primitive(u.address),
-                            amount=int(u.amount[0].quantity))
-                    )
-                )
-                utxo_to_remove.append(u)
-                if utxo_sum > (TRANSACTION_AMOUNT + 2000000):
-                    break
-
-            for ur in utxo_to_remove:
-                utxos.remove(ur)
-
+            builder.add_input_address(self.spending_addr)
             builder.add_output(TransactionOutput(self.spending_addr, Value.from_primitive([TRANSACTION_AMOUNT])))
-
-            builder = TransactionBuilder(self.context)
 
             # Chunk size
             # bytearrays is not accept
@@ -172,13 +146,13 @@ class Cardano:
             # Metadata. accept int key type
             builder.auxiliary_data = AuxiliaryData(Metadata({1: value}))
 
-            # Encouter with err issue
-            signed_tx = builder.build_and_sign([self.payment_signing_key], change_address=self.spending_addr)
+            signed_tx = builder.build_and_sign([self.payment_signing_key],
+                                               change_address=self.spending_addr,
+                                               merge_change=True)
             # Submit transaction
+            dd = signed_tx.to_cbor()
             self.context.submit_tx(signed_tx.to_cbor())
         except Exception as e:
-            # self.flushQueueV2() <= hack
-
             self.timer = Timer(90, self.flushQueueV2)
             self.timer.start()
 
