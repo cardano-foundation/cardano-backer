@@ -455,29 +455,29 @@ class ReceiptEnd(doing.DoDoer):
         if ilk not in (Ilks.icp, Ilks.rot, Ilks.ixn, Ilks.dip, Ilks.drt):
             raise falcon.HTTPBadRequest(description=f"invalid event type ({ilk})for receipting")
 
-        msg = bytearray(serder.raw)
-        msg.extend(cr.attachments.encode("utf-8"))
-        self.ledger.publishEventv2(msg)
-        self.psr.parseOne(ims=msg)
+        ### start ###
+        rct = self.hab.receipt(serder)
+        self.psr.parseOne(ims=bytes(rct))
+        wigs = self.hab.db.getWigs(dbing.dgKey(pre, serder.said))
+
+        # Extend event with wigers
+        event_msg = bytearray(serder.raw)
+
+        event_msg.extend(cr.attachments.encode("utf-8"))
+        event_msg.extend(coring.Counter(code=coring.CtrDex.WitnessIdxSigs,
+                                        count=len(wigs)).qb64b)
+        for wig in wigs:
+            event_msg.extend(wig)
+        ## end ###
+        self.ledger.publishEventv2(event_msg)
+        self.psr.parseOne(ims=event_msg)
+
         if pre in self.hab.kevers:
             kever = self.hab.kevers[pre]
             wits = kever.wits
-
             if self.hab.pre not in wits:
                 raise falcon.HTTPBadRequest(description=f"{self.hab.pre} is not a valid witness for {pre} event at "
                                                         f"{serder.sn}: wits={wits}")
-
-            rct = self.hab.receipt(serder)
-
-            self.psr.parseOne(bytes(rct))
-            if self.ledger:
-                try:
-                    # KEL will push to on-chain icpMessage-controllerSig-witnessSig
-                    self.ledger.publishEventv2(bytes(rct))
-
-                except Exception as e:
-                    logger.error(f"ledger error: {e}")
-
             rep.set_header('Content-Type', "application/json+cesr")
             rep.status = falcon.HTTP_200
             rep.data = rct
