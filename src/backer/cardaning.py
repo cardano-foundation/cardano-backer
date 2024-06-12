@@ -43,7 +43,8 @@ class Cardano:
 
     def __init__(self, name='backer', hab=None, ks=None):
         self.name = name
-        self.pendingKEL = {}
+        # TODO: pending_kel should change to array
+        self.pending_kel = None
         self.timer = Timer(QUEUE_DURATION, self.flushQueue)
         # BLOCKFROST_API_KEY can be empty for blockfrost-ryo instances
         blockfrostProjectId=os.environ.get('BLOCKFROST_API_KEY', '')
@@ -67,56 +68,39 @@ class Cardano:
         else:
             self.fundAddress(self.spending_addr)
 
-    def publishEvent(self, event):
-        print("Adding event to queue", event['ked']['s'],event['ked']['t'])
-        seq_no = int(event['ked']['s'],16)
-        prefix = event['ked']['i']
-        if not prefix in self.pendingKEL: self.pendingKEL[prefix] = {}
-        string_event = json.dumps(event, separators=(',', ':'),ensure_ascii=False)
-        self.pendingKEL[prefix][seq_no] = [string_event[i:i+64] for i in range(0, len(string_event), 64)]
+    def publishEvent(self, event: bytearray):
+        # TODO: Change to the arrays
+        self.pending_kel = event
         if not self.timer.is_alive():
             self.timer = Timer(90, self.flushQueue)
             self.timer.start()
 
+
     def flushQueue(self):
-        print("Flushing Queue")
         try:
             txs = self.api.address_transactions(self.spending_addr)
             utxos = self.api.address_utxos(self.spending_addr.encode())
             kels_to_remove = []
-            for key, value in self.pendingKEL.items():
-                # Check last KE in blockchain to avoid duplicates (for some reason (TBD) mailbox may submit an event twice)                
-                for t in txs:
-                    meta = self.api.transaction_metadata(t.tx_hash, return_type='json')
-                    for m in meta:
-                        ke = json.loads(''.join(m['json_metadata']))
-                        seq = int(m['label'])
-                        if ke['ked']['i'] == key and seq in self.pendingKEL[key]: del self.pendingKEL[key][seq]
-                # Build transaction
-                builder = TransactionBuilder(self.context)
-                # select utxos
-                utxo_sum = 0
-                utxo_to_remove = []
-                for u in utxos:
-                    utxo_sum = utxo_sum + int(u.amount[0].quantity)
-                    builder.add_input(
-                        UTxO(
-                            TransactionInput.from_primitive([u.tx_hash, u.tx_index]),
-                            TransactionOutput(address=Address.from_primitive(u.address), amount=int(u.amount[0].quantity))
-                        )
-                    )
-                    utxo_to_remove.append(u)
-                    if utxo_sum > (TRANSACTION_AMOUNT + 2000000): break
-                for ur in utxo_to_remove: utxos.remove(ur)
-                builder.add_output(TransactionOutput(self.spending_addr,Value.from_primitive([TRANSACTION_AMOUNT])))
-                builder.auxiliary_data = AuxiliaryData(Metadata(value))
-                signed_tx = builder.build_and_sign([self.payment_signing_key], change_address=self.spending_addr)
-                # Submit transaction
-                self.context.submit_tx(signed_tx.to_cbor())
-                kels_to_remove.append(key)
-            self.pendingKEL = {}
+            # Build transaction
+            builder = TransactionBuilder(self.context)
+            builder.add_input_address(self.spending_addr)
+            builder.add_output(TransactionOutput(self.spending_addr, Value.from_primitive([TRANSACTION_AMOUNT])))
+
+            # Chunk size
+            # bytearrays is not accept
+            self.pending_kel = bytes(self.pending_kel)
+            value = [self.pending_kel[i:i + 64] for i in range(0, len(self.pending_kel), 64)]
+
+            # Metadata. accept int key type
+            builder.auxiliary_data = AuxiliaryData(Metadata({1: value}))
+
+            signed_tx = builder.build_and_sign([self.payment_signing_key],
+                                               change_address=self.spending_addr,
+                                               merge_change=True)
+            # Submit transaction
+            dd = signed_tx.to_cbor()
+            self.context.submit_tx(signed_tx.to_cbor())
         except Exception as e:
-            for k in kels_to_remove: del self.pendingKEL[k]
             self.timer = Timer(90, self.flushQueue)
             self.timer.start()
 

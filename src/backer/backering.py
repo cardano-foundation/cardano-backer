@@ -8,6 +8,7 @@ class to support registrar backers
 
 import falcon
 import time
+import re
 
 from hio.base import doing
 from hio.core import http
@@ -18,7 +19,7 @@ import keri.app.oobiing
 from keri.app import directing, storing, httping, forwarding, oobiing
 from keri import help
 from keri.core import eventing, parsing, routing
-from keri.core.coring import Ilks
+from keri.core.coring import Ilks, Sadder, Counter, Siger
 from keri.db import basing, dbing
 
 from keri.end import ending
@@ -301,6 +302,7 @@ class HttpEnd:
            204:
               description: KEL or EXN event accepted.
         """
+        print("POST REQUEST AT HTTPEND")
         if req.method == "OPTIONS":
             rep.status = falcon.HTTP_200
             return
@@ -455,29 +457,31 @@ class ReceiptEnd(doing.DoDoer):
 
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
-
         self.psr.parseOne(ims=msg)
 
         if pre in self.hab.kevers:
+            ### start ###
+            rct = self.hab.receipt(serder)
+            self.psr.parseOne(ims=bytes(rct))
+            wigs = self.hab.db.getWigs(dbing.dgKey(pre, serder.said))
+
+            # Extend event with wigers
+            event_msg = bytearray(serder.raw)
+
+            event_msg.extend(cr.attachments.encode("utf-8"))
+            event_msg.extend(coring.Counter(code=coring.CtrDex.WitnessIdxSigs,
+                                            count=len(wigs)).qb64b)
+            for wig in wigs:
+                event_msg.extend(wig)
+            ## end ###
+            self.ledger.publishEvent(event_msg)
+            self.psr.parseOne(ims=event_msg)
+
             kever = self.hab.kevers[pre]
             wits = kever.wits
-
             if self.hab.pre not in wits:
                 raise falcon.HTTPBadRequest(description=f"{self.hab.pre} is not a valid witness for {pre} event at "
                                                         f"{serder.sn}: wits={wits}")
-
-            rct = self.hab.receipt(serder)
-
-            self.psr.parseOne(bytes(rct))
-
-            if self.ledger:
-                try:
-                    event = eventing.loadEvent(self.hab.db, pre, serder.saidb)
-                    self.ledger.publishEvent(event)
-                    
-                except Exception as e:
-                    logger.error(f"ledger error: {e}")
-
             rep.set_header('Content-Type', "application/json+cesr")
             rep.status = falcon.HTTP_200
             rep.data = rct
