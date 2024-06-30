@@ -80,8 +80,6 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledg
 
     httpEnd = HttpEnd(rxbs=parser.ims, mbx=mbx, hab=hab, ledger=ledger)
     app.add_route("/", httpEnd)    
-    receiptEnd = ReceiptEnd(hab=hab, inbound=cues, ledger=ledger)
-    app.add_route("/receipts", receiptEnd)
 
     server = http.Server(port=httpPort, app=app)
     httpServerDoer = http.ServerDoer(server=server)
