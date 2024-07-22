@@ -27,6 +27,7 @@ from keri.peer import exchanging
 from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
 from keri.core import coring
+from src.backer.constant import SAID
 
 logger = help.ogler.getLogger()
 
@@ -296,6 +297,21 @@ class HttpEnd:
 
         cr = httping.parseCesrHttpRequest(req=req)
         serder = serdering.SerderKERI(sad=cr.payload, kind=eventing.Serials.json)
+
+        # Confirm registry backer
+        if "RB" not in ked["c"]:
+            raise falcon.HTTPBadRequest(falcon.HTTP_400)
+
+        for item in ked["a"]:
+            if not item["bi"]:
+                raise falcon.HTTPBadRequest(falcon.HTTP_400)
+            else:
+                if item["bi"] != self.hab.pre:
+                    raise falcon.HTTPBadRequest(falcon.HTTP_400)
+
+                if item["d"] != SAID:
+                    raise falcon.HTTPBadRequest(falcon.HTTP_400)
+
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
 
