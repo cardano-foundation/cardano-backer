@@ -298,11 +298,12 @@ class HttpEnd:
         cr = httping.parseCesrHttpRequest(req=req)
         serder = serdering.SerderKERI(sad=cr.payload, kind=eventing.Serials.json)
 
+        backer_identifier_ked = self.hab.kevers[self.hab.pre].serder.ked
         # Confirm registry backer
-        if "RB" not in ked["c"]:
+        if "RB" not in backer_identifier_ked["c"]:
             raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
-        for item in ked["a"]:
+        for item in backer_identifier_ked["a"]:
             if not item["bi"]:
                 raise falcon.HTTPBadRequest(falcon.HTTP_400)
             else:
