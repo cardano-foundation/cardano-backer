@@ -27,7 +27,8 @@ from keri.peer import exchanging
 from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
 from keri.core import coring
-from src.backer.constant import SAID
+from .constants import SAID
+from .enum import TraitCodex
 
 logger = help.ogler.getLogger()
 
@@ -300,7 +301,7 @@ class HttpEnd:
 
         backer_identifier_ked = self.hab.kevers[self.hab.pre].serder.ked
         # Confirm registry backer
-        if "RB" not in backer_identifier_ked["c"]:
+        if TraitCodex.RegistryBackers.value not in backer_identifier_ked["c"]:
             raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
         for item in backer_identifier_ked["a"]:
