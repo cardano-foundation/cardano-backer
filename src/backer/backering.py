@@ -304,16 +304,16 @@ class HttpEnd:
         if TraitCodex.RegistryBackers.value not in serder.ked["c"]:
             raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
-        is_data_valid = False
+        contains_valid_seal = False
         for item in serder.ked["a"]:
             if (
                     item["bi"]
-                    and item["bi"] != backer_identifier
-                    and item["d"] != REGISTRAR_SEAL_SAID
+                    and item["bi"] == backer_identifier
+                    and item["d"] == REGISTRAR_SEAL_SAID
             ):
-                is_data_valid = True
+                contains_valid_seal = True
 
-        if is_data_valid is False:
+        if contains_valid_seal is False:
             raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
         msg = bytearray(serder.raw)
