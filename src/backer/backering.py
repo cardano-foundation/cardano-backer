@@ -27,7 +27,7 @@ from keri.peer import exchanging
 from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
 from keri.core import coring
-from .constants import SAID
+from .constants import REGISTRAR_SEAL_SAID
 from .enum import TraitCodex
 
 logger = help.ogler.getLogger()
@@ -304,15 +304,17 @@ class HttpEnd:
         if TraitCodex.RegistryBackers.value not in backer_identifier_ked["c"]:
             raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
+        is_data_valid = False
         for item in backer_identifier_ked["a"]:
-            if not item["bi"]:
-                raise falcon.HTTPBadRequest(falcon.HTTP_400)
-            else:
-                if item["bi"] != self.hab.pre:
-                    raise falcon.HTTPBadRequest(falcon.HTTP_400)
+            if (
+                    item["bi"]
+                    and item["bi"] != self.hab.pre
+                    and item["d"] != REGISTRAR_SEAL_SAID
+            ):
+                is_data_valid = True
 
-                if item["d"] != SAID:
-                    raise falcon.HTTPBadRequest(falcon.HTTP_400)
+        if is_data_valid is False:
+            raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
