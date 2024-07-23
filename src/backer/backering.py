@@ -301,7 +301,7 @@ class HttpEnd:
 
         backer_identifier = serder.ked["b"]
         # Confirm registry backer
-        if TraitCodex.RegistryBackers.value not in backer_identifier_ked["c"]:
+        if TraitCodex.RegistryBackers.value not in serder.ked["c"]:
             raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
         is_data_valid = False
