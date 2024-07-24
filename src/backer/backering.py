@@ -17,7 +17,7 @@ from hio.help import decking
 import keri.app.oobiing
 from keri.app import directing, storing, httping, forwarding, oobiing
 from keri import help
-from keri.core import eventing, parsing, routing
+from keri.core import serdering, eventing, parsing, routing
 from keri.core.coring import Ilks
 from keri.db import basing, dbing
 
@@ -48,7 +48,7 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledg
 
     mbx = mbx if mbx is not None else storing.Mailboxer(name=alias, temp=hby.temp)
     forwarder = forwarding.ForwardHandler(hby=hby, mbx=mbx)
-    exchanger = exchanging.Exchanger(db=hby.db, handlers=[forwarder])
+    exchanger = exchanging.Exchanger(hby=hby, handlers=[forwarder])
     clienter = httping.Clienter()
     oobiery = keri.app.oobiing.Oobiery(hby=hby, clienter=clienter)
 
@@ -93,12 +93,21 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledg
 
     directant = directing.Directant(hab=hab, server=server, verifier=verfer)
 
-    witStart = BackerStart(hab=hab, parser=parser, cues=cues,
-                            kvy=kvy, tvy=tvy, rvy=rvy, exc=exchanger, replies=rep.reps,
-                            responses=rep.cues, queries=httpEnd.qrycues)
+    witStart = BackerStart(
+        hab=hab,
+        parser=parser,
+        cues=cues,
+        kvy=kvy,
+        tvy=tvy,
+        rvy=rvy,
+        exc=exchanger,
+        replies=rep.reps,
+        responses=rep.cues,
+        queries=httpEnd.qrycues)
 
     doers.extend(oobiRes)
-    doers.extend([regDoer, exchanger, directant, serverDoer, httpServerDoer, rep, witStart, *oobiery.doers])
+    doers.extend([regDoer,
+                  directant, serverDoer, httpServerDoer, rep, witStart, *oobiery.doers])
 
     return doers
 
@@ -120,7 +129,7 @@ class BackerStart(doing.DoDoer):
         self.cues = cues if cues is not None else decking.Deck()
 
         doers = [doing.doify(self.start), doing.doify(self.msgDo),
-                 doing.doify(self.exchangerDo), doing.doify(self.escrowDo), doing.doify(self.cueDo)]
+                 doing.doify(self.escrowDo), doing.doify(self.cueDo)]
         super().__init__(doers=doers, **opts)
 
     def start(self, tymth=None, tock=0.0):
@@ -222,28 +231,6 @@ class BackerStart(doing.DoDoer):
                 yield self.tock
             yield self.tock
 
-    def exchangerDo(self, tymth=None, tock=0.0):
-        """
-        Returns doifiable Doist compatibile generator method (doer dog) to process
-            .exc responses and pass them on to the HTTPRespondant
-
-        Parameters:
-            tymth (function): injected function wrapper closure returned by .tymen() of
-                Tymist instance. Calling tymth() returns associated Tymist .tyme.
-            tock (float): injected initial tock value
-
-        Usage:
-            add result of doify on this method to doers list
-        """
-        self.wind(tymth)
-        self.tock = tock
-        _ = (yield self.tock)
-
-        while True:
-            for rep in self.exc.processResponseIter():
-                self.replies.append(rep)
-                yield  # throttle just do one cue at a time
-            yield
 
 class HttpEnd:
     """
@@ -309,7 +296,7 @@ class HttpEnd:
         rep.set_header('connection', "close")
 
         cr = httping.parseCesrHttpRequest(req=req)
-        serder = eventing.Serder(ked=cr.payload, kind=eventing.Serials.json)
+        serder = serdering.SerderKERI(sad=cr.payload, kind=eventing.Serials.json)
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
 
@@ -396,7 +383,7 @@ class MailboxIterable:
 
                     if self.ledger and topic == "/receipt":
                         try:
-                            serder = coring.Serder(raw=msg)
+                            serder = serdering.SerderKERI(raw=msg)
                             event = eventing.loadEvent(self.hab.db, self.pre, serder.saidb)
                             self.ledger.publishEvent(event)
                             
@@ -446,7 +433,7 @@ class ReceiptEnd(doing.DoDoer):
         rep.set_header('connection', "close")
 
         cr = httping.parseCesrHttpRequest(req=req)
-        serder = eventing.Serder(ked=cr.payload, kind=eventing.Serials.json)
+        serder = serdering.SerderKERI(sad=cr.payload, kind=eventing.Serials.json)
 
         pre = serder.ked["i"]
         ilk = serder.ked["t"]
@@ -516,7 +503,7 @@ class ReceiptEnd(doing.DoDoer):
         if not (raw := self.hab.db.getEvt(key=dgkey)):
             raise falcon.HTTPNotFound(description="Missing event for dig={}.".format(said))
 
-        serder = coring.Serder(raw=bytes(raw))
+        serder = serdering.SerderKERI(raw=bytes(raw))
         if serder.sn > 0:
             wits = [wit.qb64 for wit in self.hab.kvy.fetchWitnessState(pre, serder.sn)]
         else:

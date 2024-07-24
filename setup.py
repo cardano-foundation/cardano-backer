@@ -22,7 +22,7 @@ setup(
     python_requires='>=3.10.4',
     install_requires=[
         'hio>=0.6.9',
-        'keri>=1.0.0',
+        'keri==1.1.16',
         'multicommand>=1.0.0',
         'blockfrost-python==0.5.2',
         'pycardano==0.7.0',
