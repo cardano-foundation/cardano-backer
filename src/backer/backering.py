@@ -307,9 +307,9 @@ class HttpEnd:
         contains_valid_seal = False
         for item in serder.ked["a"]:
             if (
-                    item["bi"]
-                    and item["bi"] == backer_identifier
-                    and item["d"] == REGISTRAR_SEAL_SAID
+                item["bi"]
+                and item["bi"] == backer_identifier
+                and item["d"] == REGISTRAR_SEAL_SAID
             ):
                 contains_valid_seal = True
 
