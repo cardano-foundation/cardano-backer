@@ -21,6 +21,7 @@ from keri import help
 
 from keri.core import serdering, eventing, parsing, routing
 from keri.core.coring import Ilks
+from keri.core.eventing import TraitCodex
 from keri.db import basing, dbing
 from keri.end import ending
 from keri.peer import exchanging
@@ -312,6 +313,7 @@ class HttpEnd:
                 and item["d"] == REGISTRAR_SEAL_SAID
             ):
                 contains_valid_seal = True
+                break
 
         if contains_valid_seal is False:
             raise falcon.HTTPBadRequest(falcon.HTTP_400)
