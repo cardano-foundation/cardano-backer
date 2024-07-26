@@ -29,7 +29,6 @@ from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
 from keri.core import coring
 from .constants import REGISTRAR_SEAL_SAID
-from .enum import TraitCodex
 
 logger = help.ogler.getLogger()
 
@@ -302,7 +301,7 @@ class HttpEnd:
 
         backer_identifier = serder.ked["b"]
         # Confirm registry backer
-        if TraitCodex.RegistryBackers.value not in serder.ked["c"]:
+        if TraitCodex.Backers not in serder.ked["c"]:
             raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
         contains_valid_seal = False
