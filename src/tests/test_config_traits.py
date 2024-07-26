@@ -1,7 +1,6 @@
 from keri.app import habbing
 from keri.core import coring, serdering, eventing
 from hio.help import Hict
-from ..constants import REGISTRAR_SEAL_SAID
 import requests
 
 
@@ -68,8 +67,8 @@ def test_registra_backer_missing_seal():
         icp = {
             "v": "KERI10JSON00012b_",
             "t": "icp",
-            "d": "EOWWNh7IT3TzmTiKWs3JQ9YqruZQEEH93M2kN_7LzRUd",
-            "i": "EOWWNh7IT3TzmTiKWs3JQ9YqruZQEEH93M2kN_7LzRUd",
+            "d": "EMgk6GJ8LEIW3VwnUlXNWWz-sGqY-fhQxw6owGLv5bWP",
+            "i": "EMgk6GJ8LEIW3VwnUlXNWWz-sGqY-fhQxw6owGLv5bWP",
             "s": "0",
             "kt": "1",
             "k": ["DCwn62HEdsIbb0Tf-xTTR3fxZMQspc4iNbghK93Tfv1m"],
@@ -130,12 +129,7 @@ def test_registra_backer_no_matching_backer_identifier():
             "bt": "0",
             "b": ["bi"],
             "c": ["RB"],
-            "a": [
-                {
-                    "bi": "xxbi",
-                    "d": "REGISTRAR_SEAL_SAID"
-                }
-            ],
+            "a": [{"bi": "xxbi", "d": "REGISTRAR_SEAL_SAID"}],
         }
 
         serder = serdering.SerderKERI(sad=icp, kind=eventing.Serials.json)
@@ -166,7 +160,7 @@ def test_registra_backer_no_matching_backer_identifier():
         assert res.status_code == 400
 
 
-def test_registra_backer_no_not_matching_seal():
+def test_registra_backer_not_matching_seal():
     salt = b"0123456789abcdef"
     salter = coring.Salter(raw=salt)
 
@@ -187,12 +181,7 @@ def test_registra_backer_no_not_matching_seal():
             "bt": "0",
             "b": ["bi"],
             "c": ["RB"],
-            "a": [
-                {
-                    "bi": "bi",
-                    "d": "xxREGISTRAR_SEAL_SAID"
-                }
-            ],
+            "a": [{"bi": "bi", "d": "xxREGISTRAR_SEAL_SAID"}],
         }
 
         serder = serdering.SerderKERI(sad=icp, kind=eventing.Serials.json)
@@ -234,21 +223,22 @@ def test_registra_backer():
         icp = {
             "v": "KERI10JSON00012b_",
             "t": "icp",
-            "d": "EEpenHpqV48qMk3q-HQv9ro8oYTqZQOV9PvD77rdS1n0",
-            "i": "EEpenHpqV48qMk3q-HQv9ro8oYTqZQOV9PvD77rdS1n0",
+            "d": "EO_bl6JM8Y_iBvA2LNBZtECAGkFxCg6w7ksBTBTzuGFJ",
+            "i": "EO_bl6JM8Y_iBvA2LNBZtECAGkFxCg6w7ksBTBTzuGFJ",
             "s": "0",
             "kt": "1",
             "k": ["DCwn62HEdsIbb0Tf-xTTR3fxZMQspc4iNbghK93Tfv1m"],
             "nt": "1",
             "n": ["EDzxxCBaWkzJ2Azn5HS50DZjslp-HMPeG6vGEm4AW168"],
             "bt": "0",
-            "b": ["bi"],
+            "b": [
+                "biAA",
+                "biBB"
+            ],
             "c": ["RB"],
             "a": [
-                {
-                    "bi": "bi",
-                    "d": "REGISTRAR_SEAL_SAID"
-                }
+                {"bi": "biAA", "d": "REGISTRAR_SEAL_SAID"},
+                {"bi": "biBB", "d": "REGISTRAR_SEAL_SAID"}
             ],
         }
 
