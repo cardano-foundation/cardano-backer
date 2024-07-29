@@ -317,7 +317,7 @@ class HttpEnd:
                     valid_backer_seals += 1
                     break
 
-        if contains_valid_seal is False and valid_backer_seals < len(backer_identifiers):
+        if contains_valid_seal is False and valid_backer_seals != len(backer_identifiers):
             raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
         msg = bytearray(serder.raw)
