@@ -21,12 +21,14 @@ from keri import help
 
 from keri.core import serdering, eventing, parsing, routing
 from keri.core.coring import Ilks
+from keri.core.eventing import TraitCodex
 from keri.db import basing, dbing
 from keri.end import ending
 from keri.peer import exchanging
 from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
 from keri.core import coring
+from .constants import REGISTRAR_SEAL_SAID
 
 logger = help.ogler.getLogger()
 
@@ -296,6 +298,29 @@ class HttpEnd:
 
         cr = httping.parseCesrHttpRequest(req=req)
         serder = serdering.SerderKERI(sad=cr.payload, kind=eventing.Serials.json)
+
+        backer_identifiers = serder.ked["b"]
+
+        # Confirm registry backer
+        # raise exception when invalid registry backer or invalid identifier
+        if TraitCodex.Backers not in serder.ked["c"] or self.hab.pre not in backer_identifiers:
+            raise falcon.HTTPBadRequest(falcon.HTTP_400)
+
+        valid_backer_seals = 0
+
+
+        for key, item in enumerate(serder.ked["a"]):
+            if (
+                item["bi"]
+                and item["d"] == REGISTRAR_SEAL_SAID
+            ):
+                if backer_identifiers[key] == item["bi"]:
+                    valid_backer_seals += 1
+                    break
+
+        if valid_backer_seals != len(backer_identifiers):
+            raise falcon.HTTPBadRequest(falcon.HTTP_400)
+
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
 
