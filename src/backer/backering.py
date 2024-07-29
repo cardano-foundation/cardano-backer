@@ -305,6 +305,8 @@ class HttpEnd:
             raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
         contains_valid_seal = False
+        valid_backer_seals = 0
+
         for key, item in enumerate(serder.ked["a"]):
             if (
                 item["bi"]
@@ -312,9 +314,10 @@ class HttpEnd:
             ):
                 if backer_identifiers[key] == item["bi"]:
                     contains_valid_seal = True
+                    valid_backer_seals += 1
                     break
 
-        if contains_valid_seal is False:
+        if contains_valid_seal is False and valid_backer_seals < len(backer_identifiers):
             raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
         msg = bytearray(serder.raw)
