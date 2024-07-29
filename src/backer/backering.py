@@ -300,11 +300,14 @@ class HttpEnd:
         serder = serdering.SerderKERI(sad=cr.payload, kind=eventing.Serials.json)
 
         backer_identifiers = serder.ked["b"]
+
         # Confirm registry backer
-        if TraitCodex.Backers not in serder.ked["c"]:
+        # raise exception when invalid registry backer or invalid identifier
+        if TraitCodex.Backers not in serder.ked["c"] or self.hab.pre not in backer_identifiers:
             raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
         valid_backer_seals = 0
+
 
         for key, item in enumerate(serder.ked["a"]):
             if (
