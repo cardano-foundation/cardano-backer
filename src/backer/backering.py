@@ -29,6 +29,7 @@ from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
 from keri.core import coring
 from .constants import REGISTRAR_SEAL_SAID
+from ... import queueing
 
 logger = help.ogler.getLogger()
 
@@ -106,9 +107,11 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledg
         responses=rep.cues,
         queries=httpEnd.qrycues)
 
+    queueStart = queueing.Queueing(hab=hab)
+
     doers.extend(oobiRes)
     doers.extend([regDoer,
-                  directant, serverDoer, httpServerDoer, rep, witStart, *oobiery.doers])
+                  directant, serverDoer, httpServerDoer, rep, witStart, queueStart, *oobiery.doers])
 
     return doers
 
@@ -383,6 +386,7 @@ class MailboxIterable:
         self.retry = retry
         self.hab = hab
         self.ledger = ledger
+        self.queue = queueing.Queueing(hab=hab)
 
     def __iter__(self):
         self.start = self.end = time.perf_counter()
@@ -407,6 +411,8 @@ class MailboxIterable:
 
                     if self.ledger and topic == "/receipt":
                         try:
+                            self.queue,push_to_queued(self.pre, msg)
+
                             serder = serdering.SerderKERI(raw=msg)
                             event = eventing.loadEvent(self.hab.db, self.pre, serder.saidb)
                             self.ledger.publishEvent(event)
