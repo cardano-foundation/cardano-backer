@@ -412,11 +412,6 @@ class MailboxIterable:
                     if self.ledger and topic == "/receipt":
                         try:
                             self.queue,push_to_queued(self.pre, msg)
-
-                            serder = serdering.SerderKERI(raw=msg)
-                            event = eventing.loadEvent(self.hab.db, self.pre, serder.saidb)
-                            self.ledger.publishEvent(event)
-                            
                         except Exception as e:
                             logger.error(f"ledger error: {e}")
                 self.topics[topic] = idx
