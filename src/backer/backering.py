@@ -411,7 +411,7 @@ class MailboxIterable:
 
                     if self.ledger and topic == "/receipt":
                         try:
-                            self.queue,push_to_queued(self.pre, msg)
+                            self.queue.push_to_queued(self.pre, msg)
                         except Exception as e:
                             logger.error(f"ledger error: {e}")
                 self.topics[topic] = idx
