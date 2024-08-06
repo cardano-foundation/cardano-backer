@@ -10,7 +10,6 @@ class Queueing(doing.Doer):
         self.name = name
         self.hab = hab
         # TODO: pending_kel should change to array
-        self.pending_kel = None
         self.ledger = cardaning.Cardano(name=name, hab=hab)
         # sub-dbs
         self.keldb_queued = subing.SerderSuber(db=hab.db, subkey="kel_queued")
@@ -28,8 +27,8 @@ class Queueing(doing.Doer):
         for (pre, said), serder in self.keldb_queued.getItemIter():
             event = eventing.loadEvent(self.hab.db, pre, serder.saidb)
             self.ledger.publishEvent(event=event)
-            self.keldb_queued.rem(keys=pre)
             self.keldb_published.pin(keys=pre, val=serder)
+            self.keldb_queued.rem(keys=pre)
 
     def recur(self, tyme=None):
         while True:
