@@ -1,7 +1,10 @@
 from hio import doing
+from keri import help
 from keri.db import subing
 from keri.core import serdering, eventing
 from ... import cardaning
+
+logger = help.ogler.getLogger()
 
 
 class Queueing(doing.Doer):
@@ -21,14 +24,19 @@ class Queueing(doing.Doer):
         doer call run
             get from queued
                 do publishEvent
-            deleted from queued
             create in published
+            deleted from queued
         """
-        for (pre, said), serder in self.keldb_queued.getItemIter():
-            event = eventing.loadEvent(self.hab.db, pre, serder.saidb)
-            self.ledger.publishEvent(event=event)
-            self.keldb_published.pin(keys=pre, val=serder)
-            self.keldb_queued.rem(keys=pre)
+        for (pre, ), serder in self.keldb_queued.getItemIter():
+            try:
+                event = eventing.loadEvent(self.hab.db, pre, serder.saidb)
+                self.ledger.publishEvent(event=event)
+                self.keldb_published.pin(keys=pre, val=serder)
+                self.keldb_queued.rem(keys=pre)
+            except Exception as e:
+                logger.error(str(e))
+                continue
+
 
     def recur(self, tyme=None):
         while True:
