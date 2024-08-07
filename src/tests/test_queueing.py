@@ -37,9 +37,6 @@ from keri.kering import (ValidationError, DerivationError, Ilks)
 from keri import help
 from src.backer import queueing
 
-logger = help.ogler.getLogger()
-
-
 
 def test_push_to_queued():
     salt = b"0123456789abcdef"
