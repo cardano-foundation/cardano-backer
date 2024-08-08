@@ -67,10 +67,7 @@ class Cardano:
     def publishEvent(self, event: bytearray):
         # TODO: Change to the arrays
         self.pending_kel = event
-        if not self.timer.is_alive():
-            self.timer = Timer(90, self.flushQueue)
-            self.timer.start()
-
+        self.flushQueue()
 
     def flushQueue(self):
         try:            
