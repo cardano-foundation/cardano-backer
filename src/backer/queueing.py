@@ -1,4 +1,4 @@
-from hio import doing
+from hio.base import doing
 from keri import help
 from keri.db import subing
 from keri.core import serdering, eventing
