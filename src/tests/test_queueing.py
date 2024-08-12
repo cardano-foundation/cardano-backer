@@ -8,7 +8,9 @@ import os
 import blake3
 import pysodium
 import pytest
+import requests
 
+from hio.help import Hict
 from keri import kering
 from keri.app import habbing, keeping
 from keri.app.keeping import openKS, Manager
@@ -149,3 +151,59 @@ def test_fetch_push_t():
         # Verify event published and keldb_published had events from keldb_queued
         keldb_published = [(pre, serder) for (pre,), serder in queue.keldb_published.getItemIter()]
         assert keldb_published != []
+
+
+def test_http_call():
+    salter = Salter(raw=b'0123456789abcdef')
+    vsn = vesn = 0  # sn and last establishment sn = esn
+    salter = Salter(raw=b'0123456789abcdef')
+    with openDB(name="edy") as db, openKS(name="edy") as ks, habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:
+        # Init key pair manager
+        mgr = Manager(ks=ks, salt=salter.qb64)
+        hab = hby.makeHab("test02")
+
+        mgr = Manager(ks=ks, salt=salter.qb64)
+        verfers, digers = mgr.incept(icount=1, ncount=0, transferable=True, stem="C")
+        #
+        # # Test with inception message
+        # serder = incept(keys=[verfers[0].qb64], code=MtrDex.Blake3_256)
+
+        qry = hab.query(pre=hab.pre, src=hab.pre, route="/log")
+        serder = serdering.SerderKERI(raw=qry)
+        # Test with query message
+        ked = serder.ked
+
+        sigers = mgr.sign(ser=serder.raw, verfers=verfers)  # default indexed True
+        assert isinstance(sigers[0], Siger)
+        msg = messagize(serder, sigers=sigers)
+
+        srdr = serdering.SerderKERI(raw=qry)
+
+        qserder = query(route="log",
+                        query=dict(i='DAvCLRr5luWmp7keDvDuLP0kIqcyBYq79b3Dho1QvrjI'),
+                        stamp=help.helping.DTS_BASE_0)
+
+        msg = qserder.raw
+
+        CESR_CONTENT_TYPE = "application/cesr+json"
+        CESR_ATTACHMENT_HEADER = "CESR-ATTACHMENT"
+        CESR_DESTINATION_HEADER = "CESR-DESTINATION"
+
+        attachment = b'-VAj-HABEIaGMMWJFPmtXznY1IIiKDIrg-vIyge6mBl2QV8dDjI3-AABAAB6P97k'
+
+        headers = Hict(
+            [
+                ("Content-Type", CESR_CONTENT_TYPE),
+                ("Content-Length", str(len(msg))),
+                (CESR_ATTACHMENT_HEADER, attachment),
+                (
+                    CESR_DESTINATION_HEADER,
+                    "BD27gP7-sD8XSr7_tTo54aNIRzPBJGX7GvRUVojfYL2H",
+                ),
+            ]
+        )
+
+        res = requests.request(
+            "POST", "http://localhost:5666/", headers=headers, data=msg
+        )
+        assert res.status_code == 204

@@ -302,27 +302,29 @@ class HttpEnd:
         cr = httping.parseCesrHttpRequest(req=req)
         serder = serdering.SerderKERI(sad=cr.payload, kind=eventing.Serials.json)
 
-        backer_identifiers = serder.ked["b"]
+        # Should check when create identifiers only
+        if serder.ked["t"] == "icp":
+            backer_identifiers = serder.ked["b"]
 
-        # Confirm registry backer
-        # raise exception when invalid registry backer or invalid identifier
-        if TraitCodex.Backers not in serder.ked["c"] or self.hab.pre not in backer_identifiers:
-            raise falcon.HTTPBadRequest(falcon.HTTP_400)
+            # Confirm registry backer
+            # raise exception when invalid registry backer or invalid identifier
+            if TraitCodex.Backers not in serder.ked["c"] or self.hab.pre not in backer_identifiers:
+                raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
-        valid_backer_seals = 0
+            valid_backer_seals = 0
 
 
-        for key, item in enumerate(serder.ked["a"]):
-            if (
-                item["bi"]
-                and item["d"] == REGISTRAR_SEAL_SAID
-            ):
-                if backer_identifiers[key] == item["bi"]:
-                    valid_backer_seals += 1
-                    break
+            for key, item in enumerate(serder.ked["a"]):
+                if (
+                    item["bi"]
+                    and item["d"] == REGISTRAR_SEAL_SAID
+                ):
+                    if backer_identifiers[key] == item["bi"]:
+                        valid_backer_seals += 1
+                        break
 
-        if valid_backer_seals != len(backer_identifiers):
-            raise falcon.HTTPBadRequest(falcon.HTTP_400)
+            if valid_backer_seals != len(backer_identifiers):
+                raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
