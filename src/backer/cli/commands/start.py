@@ -13,6 +13,7 @@ from keri import help
 from keri.app import directing, habbing, keeping
 from ... import backering
 from ... import cardaning
+from ... import ogmiosing
 from keri.app.cli.common import existing
 
 d = "Runs KERI backer controller"
@@ -47,6 +48,7 @@ def launch(args):
     help.ogler.reopen(name=args.name, temp=True, clear=True)
 
     logger = help.ogler.getLogger()
+
 
     logger.info("\n******* Starting Backer for %s listening: http/%s, tcp/%s "
                 ".******\n\n", args.name, args.http, args.tcp)
@@ -87,9 +89,12 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
         hab = hby.makeHab(name=alias, transferable=False)
     if ledger == "cardano":
         ldg = cardaning.Cardano(name=alias, hab=hab, ks=ks)
+
+    ogm = ogmiosing.Ogmioser()
     
-    doers = [hbyDoer]
+    doers = [hbyDoer, ogm]
     doers.extend(backering.setupBacker(alias=alias,
+                                          ogm=ogm,
                                           hby=hby,
                                           tcpPort=tcp,
                                           httpPort=http,

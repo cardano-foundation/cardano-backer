@@ -33,7 +33,7 @@ from .constants import REGISTRAR_SEAL_SAID
 logger = help.ogler.getLogger()
 
 
-def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledger=None):
+def setupBacker(hby, alias="backer", ogm=None, mbx=None, tcpPort=5631, httpPort=5632, ledger=None):
     """
     Setup Registrar Backer controller and doers
 
@@ -97,6 +97,7 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledg
     witStart = BackerStart(
         hab=hab,
         parser=parser,
+        ogm=ogm,
         cues=cues,
         kvy=kvy,
         tvy=tvy,
@@ -117,9 +118,10 @@ class BackerStart(doing.DoDoer):
 
     """
 
-    def __init__(self, hab, parser, kvy, tvy, rvy, exc, cues=None, replies=None, responses=None, queries=None, **opts):
+    def __init__(self, hab, parser, ogm, kvy, tvy, rvy, exc, cues=None, replies=None, responses=None, queries=None, **opts):
         self.hab = hab
         self.parser = parser
+        self.ogm = ogm
         self.kvy = kvy
         self.tvy = tvy
         self.rvy = rvy
@@ -147,6 +149,9 @@ class BackerStart(doing.DoDoer):
         _ = (yield self.tock)
 
         while not self.hab.inited:
+            yield self.tock
+
+        while not self.ogm or not self.ogm.on_tip:
             yield self.tock
 
         print("Backer", self.hab.name, "ready", self.hab.pre)
@@ -190,6 +195,9 @@ class BackerStart(doing.DoDoer):
         self.tock = tock
         _ = (yield self.tock)
 
+        while not self.ogm or not self.ogm.on_tip:
+            yield self.tock
+
         while True:
             self.kvy.processEscrows()
             self.rvy.processEscrowReply()
@@ -220,6 +228,9 @@ class BackerStart(doing.DoDoer):
         self.wind(tymth)
         self.tock = tock
         _ = (yield self.tock)
+
+        while not self.ogm or not self.ogm.on_tip:
+            yield self.tock
 
         while True:
             while self.cues:
