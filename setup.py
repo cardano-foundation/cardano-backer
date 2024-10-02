@@ -26,6 +26,7 @@ setup(
         'multicommand>=1.0.0',
         'blockfrost-python==0.5.2',
         'pycardano==0.7.0',
-        'pprintpp>=0.4.0'
+        'pprintpp>=0.4.0',
+        'ogmios>=1.2.1'
     ]
     )
