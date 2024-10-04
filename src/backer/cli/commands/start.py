@@ -90,14 +90,12 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
     if ledger == "cardano":
         ldg = cardaning.Cardano(name=alias, hab=hab, ks=ks)
 
-    ogm = ogmiosing.Ogmioser()
-    
-    doers = [hbyDoer, ogm]
-    doers.extend(backering.setupBacker(alias=alias,
-                                          ogm=ogm,
+    backer = backering.setupBacker(alias=alias,
                                           hby=hby,
                                           tcpPort=tcp,
                                           httpPort=http,
-                                          ledger=ldg))
+                                          ledger=ldg)
+    ogm = ogmiosing.Ogmioser(backer=backer)
+    doers = [hbyDoer, ogm]
 
     directing.runController(doers=doers, expire=expire)

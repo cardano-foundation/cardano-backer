@@ -53,7 +53,7 @@ services:
         max-size: "400k"
         max-file: "20"
   ogmios:
-    image: cardanosolutions/ogmios:latest
+    image: cardanosolutions/ogmios:v6.8.0
     restart: on-failure
     command: [
       "--host", "0.0.0.0",

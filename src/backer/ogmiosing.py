@@ -15,10 +15,11 @@ logger = help.ogler.getLogger()
 
 class Ogmioser(doing.DoDoer):
 
-    def __init__(self, on_tip=False, tip_slot=0, **kwa):
+    def __init__(self, on_tip=False, backer=None, **kwa):
+        self.client = ogmios.Client()
+        self.backer = backer
         self.on_tip = on_tip
-        self.tip_slot = tip_slot
-        doers = [doing.doify(self.queryTipDo), doing.doify(self.crawlBlockDo)]
+        doers = [doing.doify(self.crawlBlockDo)]
         super(Ogmioser, self).__init__(doers=doers, **kwa)
 
     def crawlBlockDo(self, tymth=None, tock=0.0):
@@ -27,46 +28,25 @@ class Ogmioser(doing.DoDoer):
         _ = (yield self.tock)
 
         try:
-            with ogmios.Client() as client:
-                _, tip, _ = client.find_intersection.execute([ogmios.Origin()])
-                _, _, _ = client.find_intersection.execute([tip.to_point()])
+            _, tip, _ = self.client.find_intersection.execute(
+                [ogmios.Origin()])
+            _, _, _ = self.client.find_intersection.execute([tip.to_point()])
 
-                while True:
-                    direction, tip, point, _ = client.next_block.execute()
-                    if direction and direction == ogmios.Direction.forward:
-                        slot = point.slot
+            while True:
+                direction, tip, block, _ = self.client.next_block.execute()
 
-                        if self.tip_slot > 0 and self.tip_slot <= slot:
-                            self.on_tip = True
-                            logger.debug(
-                                f"Reached tip {self.tip_slot} at slot {slot}")
-                            return self.tock
-                        else:
-                            yield self.tock
+                if direction == ogmios.Direction.forward:
+                    if not self.on_tip and block.height == tip.height:
+                        logger.info(f"Reached tip at slot {block.slot}")
+                        self.on_tip = True
+                        self.extend(self.backer)
+                        self.tock = 1.0
+                else:
+                    # TODO: Handle for backward
+                    logger.debug("Backward direction")
 
-                    yield self.tock
+                yield self.tock
         except Exception as ex:
             logger.error(f"ERROR: {ex}")
-            yield self.tock
 
-        return self.tock
-
-    def queryTipDo(self, tymth=None, tock=0.0):
-        self.wind(tymth)
-        self.tock = tock
-        _ = (yield self.tock)
-
-        try:
-            with ogmios.Client() as client:
-                query_network_tip = QueryNetworkTip(client)
-
-                while not self.on_tip:
-                    network_tip = query_network_tip.execute()
-                    point = network_tip[0]
-                    self.tip_slot = point.slot
-                    yield self.tock
-        except Exception as ex:
-            yield self.tock
-            logger.error(f"ERROR: {ex}")
-
-        return self.tock
+        yield self.tock
