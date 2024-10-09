@@ -13,7 +13,7 @@ from keri import help
 from keri.app import directing, habbing, keeping
 from ... import backering
 from ... import cardaning
-from ... import ogmiosing
+from ... import crawling
 from keri.app.cli.common import existing
 
 d = "Runs KERI backer controller"
@@ -95,7 +95,7 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
                                           tcpPort=tcp,
                                           httpPort=http,
                                           ledger=ldg)
-    ogm = ogmiosing.Ogmioser(backer=backer)
-    doers = [hbyDoer, ogm]
+    crl = crawling.Crawler(backer=backer)
+    doers = [hbyDoer, crl]
 
     directing.runController(doers=doers, expire=expire)

@@ -1,26 +1,25 @@
 # -*- encoding: utf-8 -*-
 """
 CARDANO-BACKER
-backer.ogmiosing module
+backer.crawling module
 
 class to support subcribe tip from ogmios and cardano node
 """
 import ogmios
 from hio.base import doing
 from keri import help
-from ogmios.statequery import QueryNetworkTip
 
 logger = help.ogler.getLogger()
 
 
-class Ogmioser(doing.DoDoer):
+class Crawler(doing.DoDoer):
 
     def __init__(self, on_tip=False, backer=None, **kwa):
         self.client = ogmios.Client()
         self.backer = backer
         self.on_tip = on_tip
         doers = [doing.doify(self.crawlBlockDo)]
-        super(Ogmioser, self).__init__(doers=doers, **kwa)
+        super(Crawler, self).__init__(doers=doers, **kwa)
 
     def crawlBlockDo(self, tymth=None, tock=0.0):
         self.wind(tymth)
