@@ -29,6 +29,7 @@ from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
 from keri.core import coring
 from .constants import REGISTRAR_SEAL_SAID
+from ... import queueing
 
 logger = help.ogler.getLogger()
 
@@ -106,9 +107,11 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledg
         responses=rep.cues,
         queries=httpEnd.qrycues)
 
+    queueStart = queueing.Queueing(hab=hab)
+
     doers.extend(oobiRes)
     doers.extend([regDoer,
-                  directant, serverDoer, httpServerDoer, rep, witStart, *oobiery.doers])
+                  directant, serverDoer, httpServerDoer, rep, witStart, queueStart, *oobiery.doers])
 
     return doers
 
@@ -299,27 +302,29 @@ class HttpEnd:
         cr = httping.parseCesrHttpRequest(req=req)
         serder = serdering.SerderKERI(sad=cr.payload, kind=eventing.Serials.json)
 
-        backer_identifiers = serder.ked["b"]
+        # Should check when create identifiers only
+        if serder.ked["t"] == "icp":
+            backer_identifiers = serder.ked["b"]
 
-        # Confirm registry backer
-        # raise exception when invalid registry backer or invalid identifier
-        if TraitCodex.Backers not in serder.ked["c"] or self.hab.pre not in backer_identifiers:
-            raise falcon.HTTPBadRequest(falcon.HTTP_400)
+            # Confirm registry backer
+            # raise exception when invalid registry backer or invalid identifier
+            if TraitCodex.Backers not in serder.ked["c"] or self.hab.pre not in backer_identifiers:
+                raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
-        valid_backer_seals = 0
+            valid_backer_seals = 0
 
 
-        for key, item in enumerate(serder.ked["a"]):
-            if (
-                item["bi"]
-                and item["d"] == REGISTRAR_SEAL_SAID
-            ):
-                if backer_identifiers[key] == item["bi"]:
-                    valid_backer_seals += 1
-                    break
+            for key, item in enumerate(serder.ked["a"]):
+                if (
+                    item["bi"]
+                    and item["d"] == REGISTRAR_SEAL_SAID
+                ):
+                    if backer_identifiers[key] == item["bi"]:
+                        valid_backer_seals += 1
+                        break
 
-        if valid_backer_seals != len(backer_identifiers):
-            raise falcon.HTTPBadRequest(falcon.HTTP_400)
+            if valid_backer_seals != len(backer_identifiers):
+                raise falcon.HTTPBadRequest(falcon.HTTP_400)
 
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
@@ -383,6 +388,7 @@ class MailboxIterable:
         self.retry = retry
         self.hab = hab
         self.ledger = ledger
+        self.queue = queueing.Queueing(hab=hab)
 
     def __iter__(self):
         self.start = self.end = time.perf_counter()
@@ -407,10 +413,7 @@ class MailboxIterable:
 
                     if self.ledger and topic == "/receipt":
                         try:
-                            serder = serdering.SerderKERI(raw=msg)
-                            event = eventing.loadEvent(self.hab.db, self.pre, serder.saidb)
-                            self.ledger.publishEvent(event)
-                            
+                            self.queue.push_to_queued(self.pre, msg)
                         except Exception as e:
                             logger.error(f"ledger error: {e}")
                 self.topics[topic] = idx
