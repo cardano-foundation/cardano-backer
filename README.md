@@ -38,12 +38,6 @@ subcommands:
 Check variables and environmental variables that you can pass to configure the backer.
 
 ## Environment variables
-### `BLOCKFROST_API_KEY`
-
-API KEY from [Blockfrost](https://blockfrost.io). It's the only `REQUIRED` variable and it's needed to interact with the Cardano blockchain. Block Frost provide a free tier service with limits. Additionally, you can select Cardano mainnet or a testnet.
-
-Be aware that the Backer Cardano address needs to be funded (transfer ADA or tADA to it). If you are using the testnet, you can fund it at [Testnets faucet](https://docs.cardano.org/cardano-testnet/tools/faucet).
-
 ### `FUNDING_ADDRESS_CBORHEX`
  This is an `OPTIONAL` variable to provide the Private Key of funding address as CBOR Hex. Must be an Enterprice address (no Staking part) as PaymentSigningKeyShelley_ed25519. Note that storing private keys in an environmental variable is highly insecure !
 
