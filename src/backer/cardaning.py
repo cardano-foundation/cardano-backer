@@ -43,8 +43,7 @@ class Cardano:
 
     def __init__(self, name='backer', hab=None, ks=None):
         self.name = name
-        # TODO: pending_kel should change to array
-        self.pending_kel = None
+        self.pending_kel = bytearray()
         self.timer = Timer(QUEUE_DURATION, self.flushQueue)
         # BLOCKFROST_API_KEY can be empty for blockfrost-ryo instances
         blockfrostProjectId=os.environ.get('BLOCKFROST_API_KEY', '')
@@ -69,15 +68,11 @@ class Cardano:
             self.fundAddress(self.spending_addr)
 
     def publishEvent(self, event: bytearray):
-        # TODO: Change to the arrays
         self.pending_kel = event
         self.flushQueue()
 
     def flushQueue(self):
         try:
-            txs = self.api.address_transactions(self.spending_addr)
-            utxos = self.api.address_utxos(self.spending_addr.encode())
-            kels_to_remove = []
             # Build transaction
             builder = TransactionBuilder(self.context)
             builder.add_input_address(self.spending_addr)
@@ -85,7 +80,6 @@ class Cardano:
 
             # Chunk size
             # bytearrays is not accept
-            self.pending_kel = bytes(self.pending_kel)
             value = [self.pending_kel[i:i + 64] for i in range(0, len(self.pending_kel), 64)]
 
             # Metadata. accept int key type
@@ -95,8 +89,7 @@ class Cardano:
                                                change_address=self.spending_addr,
                                                merge_change=True)
             # Submit transaction
-            dd = signed_tx.to_cbor()
-            self.context.submit_tx(signed_tx.to_cbor())
+            self.context.submit_tx(signed_tx.to_cbor())            
         except Exception as e:
             self.timer = Timer(90, self.flushQueue)
             self.timer.start()

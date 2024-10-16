@@ -11,8 +11,8 @@ import logging
 from keri import __version__
 from keri import help
 from keri.app import directing, habbing, keeping
-from ... import backering
-from ... import cardaning
+from backer import backering
+from backer import cardaning
 from keri.app.cli.common import existing
 
 d = "Runs KERI backer controller"

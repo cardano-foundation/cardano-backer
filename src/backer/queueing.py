@@ -1,8 +1,8 @@
 from hio.base import doing
 from keri import help
 from keri.db import subing
-from keri.core import serdering, eventing
-from ... import cardaning
+from keri.core import serdering
+from backer import cardaning
 
 logger = help.ogler.getLogger()
 
@@ -13,7 +13,7 @@ class Queueing(doing.Doer):
         self.name = name
         self.hab = hab
         # TODO: pending_kel should change to array
-        self.ledger = cardaning.Cardano(name=name, hab=hab)
+        self.ledger = cardaning.Cardano(name=name, hab=hab, ks=hab.ks)
         # sub-dbs
         self.keldb_queued = subing.SerderSuber(db=hab.db, subkey="kel_queued")
         self.keldb_published = subing.SerderSuber(db=hab.db, subkey="kel_published")
@@ -29,8 +29,7 @@ class Queueing(doing.Doer):
         """
         for (pre, ), serder in self.keldb_queued.getItemIter():
             try:
-                event = eventing.loadEvent(self.hab.db, pre, serder.saidb)
-                self.ledger.publishEvent(event=event)
+                self.ledger.publishEvent(event=serder.raw)
                 self.keldb_published.pin(keys=pre, val=serder)
                 self.keldb_queued.rem(keys=pre)
             except Exception as e:

@@ -5,7 +5,6 @@ backer.cli.commands module
 """
 import multicommand
 from keri import help
-
 from keri.app import directing
 from backer.cli import commands
 
