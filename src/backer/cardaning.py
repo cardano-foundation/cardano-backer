@@ -44,8 +44,7 @@ class Cardano:
 
     def __init__(self, name='backer', hab=None, ks=None):
         self.name = name
-        # TODO: pending_kel should change to array
-        self.pending_kel = None
+        self.pending_kel = bytearray()
         self.timer = Timer(QUEUE_DURATION, self.flushQueue)
         self.context = pycardano.OgmiosV6ChainContext()
         self.client = ogmios.Client()
@@ -65,12 +64,11 @@ class Cardano:
             self.fundAddress(self.spending_addr)
 
     def publishEvent(self, event: bytearray):
-        # TODO: Change to the arrays
         self.pending_kel = event
         self.flushQueue()
 
     def flushQueue(self):
-        try:            
+        try:
             # Build transaction
             builder = pycardano.TransactionBuilder(self.context)
             builder.add_input_address(self.spending_addr)
@@ -78,7 +76,6 @@ class Cardano:
 
             # Chunk size
             # bytearrays is not accept
-            self.pending_kel = bytes(self.pending_kel)
             value = [self.pending_kel[i:i + 64] for i in range(0, len(self.pending_kel), 64)]
 
             # Metadata. accept int key type
@@ -88,8 +85,7 @@ class Cardano:
                                                change_address=self.spending_addr,
                                                merge_change=True)
             # Submit transaction
-            dd = signed_tx.to_cbor()
-            self.context.submit_tx(signed_tx.to_cbor())
+            self.context.submit_tx(signed_tx.to_cbor())            
         except Exception as e:
             self.timer = Timer(90, self.flushQueue)
             self.timer.start()

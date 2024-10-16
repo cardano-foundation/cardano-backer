@@ -29,7 +29,7 @@ from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
 from keri.core import coring
 from .constants import REGISTRAR_SEAL_SAID
-from ... import queueing
+from backer import queueing
 
 logger = help.ogler.getLogger()
 
