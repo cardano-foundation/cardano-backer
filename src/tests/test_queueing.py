@@ -56,7 +56,8 @@ def test_fetch_push_t():
 
     with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:     
         hab = hby.makeHab("test01", transferable=False)
-        icp = {
+        
+        icp_1 = {
             "v": "KERI10JSON00012b_",
             "t": "icp",
             "d": "EIvqOceOSGCMW4Ls-Wdi6t4K3RjKZU_DcHC_Q2w2jNs9",
@@ -72,11 +73,32 @@ def test_fetch_push_t():
             "a": [],
         }
 
-        serder = serdering.SerderKERI(sad=icp, kind=eventing.Serials.json)
-        msg = serder.raw
+        icp_2 = {
+            "v": "KERI10JSON0000fd_",
+            "t": "icp",
+            "d": "EP-4PeQ-5j1CG4MW2OrPQWbRcQ53IxEeiwqWP6IfXoom",
+            "i": "BCwn62HEdsIbb0Tf-xTTR3fxZMQspc4iNbghK93Tfv1m",
+            "s": "0",
+            "kt": "1",
+            "k": [
+                "BCwn62HEdsIbb0Tf-xTTR3fxZMQspc4iNbghK93Tfv1m"
+            ],
+            "nt": "0",
+            "n": [],
+            "bt": "0",
+            "b": [],
+            "c": [],
+            "a": []
+            }
+
+        serder_1 = serdering.SerderKERI(sad=icp_1, kind=eventing.Serials.json)
+        msg_1 = serder_1.raw
+        serder_2 = serdering.SerderKERI(sad=icp_2, kind=eventing.Serials.json)
+        msg_2 = serder_2.raw
 
         queue = queueing.Queueing(hab=hab)
-        queue.push_to_queued(hab.pre, msg)
+        queue.push_to_queued(f"{hab.pre}_1", msg_1)
+        queue.push_to_queued(f"{hab.pre}_2", msg_2)
 
         # Verify keldb_queued had events
         keldb_queued_items = [(pre, serder) for (pre,), serder in queue.keldb_queued.getItemIter()]

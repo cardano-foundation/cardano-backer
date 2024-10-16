@@ -35,6 +35,7 @@ class Queueing(doing.Doer):
             except Exception as e:
                 logger.error(str(e))
                 continue
+        self.ledger.flushQueue()
 
 
     def recur(self, tyme=None):
