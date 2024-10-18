@@ -1,3 +1,4 @@
+import os
 from hio.base import doing
 from keri import help
 from keri.db import subing
@@ -17,7 +18,7 @@ class Queueing(doing.Doer):
         # sub-dbs
         self.keldb_queued = subing.SerderSuber(db=hab.db, subkey="kel_queued")
         self.keldb_published = subing.SerderSuber(db=hab.db, subkey="kel_published")
-        self.tock = 10  # the job should run daily.
+        self.tock = os.environ.get('QUEUE_DURATION', 30)  # the job should run daily.
 
     def publish(self):
         """
@@ -26,15 +27,17 @@ class Queueing(doing.Doer):
                 do publishEvent
             create in published
             deleted from queued
-        """
-        for (pre, ), serder in self.keldb_queued.getItemIter():
+        """        
+        for (pre, _), serder in self.keldb_queued.getItemIter():
             try:
                 self.ledger.publishEvent(event=serder.raw)
-                self.keldb_published.pin(keys=pre, val=serder)
-                self.keldb_queued.rem(keys=pre)
+                keys = (pre, serder.said)
+                self.keldb_published.pin(keys=keys, val=serder)
+                self.keldb_queued.rem(keys=keys)
             except Exception as e:
                 logger.error(str(e))
                 continue
+
         self.ledger.flushQueue()
 
 
@@ -43,9 +46,9 @@ class Queueing(doing.Doer):
             self.publish()
             yield self.tock
 
-    def push_to_queued(self, pre, msg):
+    def pushToQueued(self, pre, msg):
         """
         push even to queued
         """
         serder = serdering.SerderKERI(raw=msg)
-        self.keldb_queued.pin(keys=pre, val=serder)
+        self.keldb_queued.pin(keys=(pre, serder.said), val=serder)

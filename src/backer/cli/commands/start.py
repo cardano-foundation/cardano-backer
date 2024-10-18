@@ -11,7 +11,7 @@ import logging
 from keri import __version__
 from keri import help
 from keri.app import directing, habbing, keeping
-from backer import backering
+from backer import backering, queueing
 from backer import cardaning
 from backer import crawling
 from keri.app.cli.common import existing
@@ -89,12 +89,13 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
         hab = hby.makeHab(name=alias, transferable=False)
     if ledger == "cardano":
         ldg = cardaning.Cardano(name=alias, hab=hab, ks=ks)
-
+        que = queueing.Queueing(hab=hab)
     backer = backering.setupBacker(alias=alias,
                                           hby=hby,
                                           tcpPort=tcp,
                                           httpPort=http,
-                                          ledger=ldg)
+                                          ledger=ldg,
+                                          queue=que)
     crl = crawling.Crawler(backer=backer)
     doers = [hbyDoer, crl]
 

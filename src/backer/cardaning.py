@@ -44,8 +44,7 @@ class Cardano:
 
     def __init__(self, name='backer', hab=None, ks=None):
         self.name = name
-        self.pending_kel = bytearray()
-        self.timer = Timer(QUEUE_DURATION, self.flushQueue)
+        self.pending_kel = bytearray()        
         self.context = pycardano.OgmiosV6ChainContext()
         self.client = ogmios.Client()
 
@@ -64,7 +63,7 @@ class Cardano:
             self.fundAddress(self.spending_addr)
 
     def publishEvent(self, event: bytes):
-        self.pending_kel += event
+        self.pending_kel = event + self.pending_kel
 
     def flushQueue(self):
         try:
