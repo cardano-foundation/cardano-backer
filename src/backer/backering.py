@@ -33,7 +33,7 @@ from .constants import REGISTRAR_SEAL_SAID
 logger = help.ogler.getLogger()
 
 
-def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledger=None):
+def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledger=None, queue=None):
     """
     Setup Registrar Backer controller and doers
 
@@ -80,7 +80,7 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledg
                             exc=exchanger,
                             rvy=rvy)
 
-    httpEnd = HttpEnd(rxbs=parser.ims, mbx=mbx, hab=hab, ledger=ledger)
+    httpEnd = HttpEnd(rxbs=parser.ims, mbx=mbx, hab=hab, ledger=ledger, queue=queue)
     app.add_route("/", httpEnd)
 
     server = http.Server(port=httpPort, app=app)
@@ -108,7 +108,7 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledg
 
     doers.extend(oobiRes)
     doers.extend([regDoer,
-                  directant, serverDoer, httpServerDoer, rep, witStart, *oobiery.doers])
+                  directant, serverDoer, httpServerDoer, rep, witStart, queue, *oobiery.doers])
 
     return doers
 
@@ -245,7 +245,7 @@ class HttpEnd:
     TimeoutQNF = 30
     TimeoutMBX = 5
 
-    def __init__(self, rxbs=None, mbx=None, qrycues=None, hab=None, ledger=None):
+    def __init__(self, rxbs=None, mbx=None, qrycues=None, hab=None, ledger=None, queue=None):
         """
         Create the KEL HTTP server from the Habitat with an optional Falcon App to
         register the routes with.
@@ -262,6 +262,7 @@ class HttpEnd:
         self.qrycues = qrycues if qrycues is not None else decking.Deck()
         self.hab = hab
         self.ledger = ledger
+        self.queue = queue
 
     def on_post(self, req, rep):
         """
@@ -299,34 +300,37 @@ class HttpEnd:
         cr = httping.parseCesrHttpRequest(req=req)
         serder = serdering.SerderKERI(sad=cr.payload, kind=eventing.Serials.json)
 
-        backer_identifiers = serder.ked["b"]
-
-        # Confirm registry backer
-        # raise exception when invalid registry backer or invalid identifier
-        if TraitCodex.Backers not in serder.ked["c"] or self.hab.pre not in backer_identifiers:
-            raise falcon.HTTPBadRequest(falcon.HTTP_400)
-
-        valid_backer_seals = 0
-
-
-        for key, item in enumerate(serder.ked["a"]):
-            if (
-                item["bi"]
-                and item["d"] == REGISTRAR_SEAL_SAID
-            ):
-                if backer_identifiers[key] == item["bi"]:
-                    valid_backer_seals += 1
-                    break
-
-        if valid_backer_seals != len(backer_identifiers):
-            raise falcon.HTTPBadRequest(falcon.HTTP_400)
-
+        ilk = serder.ked["t"]
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
 
+        # Should check when create identifiers only
+        if ilk in (Ilks.icp, Ilks.rot):
+            backer_identifiers = serder.ked["b"]
+
+            # Confirm registry backer
+            # raise exception when invalid registry backer or invalid identifier
+            if TraitCodex.Backers not in serder.ked["c"] or self.hab.pre not in backer_identifiers:
+                raise falcon.HTTPBadRequest(falcon.HTTP_400)
+
+            valid_backer_seals = 0
+
+            for key, item in enumerate(serder.ked["a"]):
+                if (
+                    item["bi"]
+                    and item["d"] == REGISTRAR_SEAL_SAID
+                ):
+                    if backer_identifiers[key] == item["bi"]:
+                        valid_backer_seals += 1
+                        break
+
+            if valid_backer_seals != len(backer_identifiers):
+                raise falcon.HTTPBadRequest(falcon.HTTP_400)
+            else:
+                self.queue.pushToQueued(serder.pre, msg)
+
         self.rxbs.extend(msg)
 
-        ilk = serder.ked["t"]
         if ilk in (Ilks.icp, Ilks.rot, Ilks.ixn, Ilks.dip, Ilks.drt, Ilks.exn, Ilks.rpy):
             rep.set_header('Content-Type', "application/json")
             rep.status = falcon.HTTP_204
@@ -337,7 +341,7 @@ class HttpEnd:
             if serder.ked["r"] in ("mbx",):
                 rep.set_header('Content-Type', "text/event-stream")
                 rep.status = falcon.HTTP_200
-                rep.stream = QryRpyMailboxIterable(mbx=self.mbx, cues=self.qrycues, said=serder.said, hab=self.hab,ledger=self.ledger)
+                rep.stream = QryRpyMailboxIterable(mbx=self.mbx, cues=self.qrycues, said=serder.said, hab=self.hab,ledger=self.ledger, queue=self.queue)
             else:
                 rep.set_header('Content-Type', "application/json")
                 rep.status = falcon.HTTP_204
@@ -345,7 +349,7 @@ class HttpEnd:
 
 class QryRpyMailboxIterable:
 
-    def __init__(self, cues, mbx, said, retry=5000, hab=None, ledger=None):
+    def __init__(self, cues, mbx, said, retry=5000, hab=None, ledger=None, queue=None):
         self.mbx = mbx
         self.retry = retry
         self.cues = cues
@@ -366,7 +370,7 @@ class QryRpyMailboxIterable:
                     kin = cue["kin"]
                     if kin == "stream":
                         self.iter = iter(MailboxIterable(mbx=self.mbx, pre=cue["pre"], topics=cue["topics"],
-                                                         retry=self.retry, hab=self.hab, ledger=self.ledger))
+                                                         retry=self.retry, hab=self.hab, ledger=self.ledger, queue=self.queue))
                 else:
                     self.cues.append(cue)
             return b''
@@ -376,13 +380,14 @@ class QryRpyMailboxIterable:
 class MailboxIterable:
     TimeoutMBX = 30000000
 
-    def __init__(self, mbx, pre, topics, retry=5000, hab=None, ledger=None):
+    def __init__(self, mbx, pre, topics, retry=5000, hab=None, ledger=None, queue=None):
         self.mbx = mbx
         self.pre = pre
         self.topics = topics
         self.retry = retry
         self.hab = hab
         self.ledger = ledger
+        self.queue = queue
 
     def __iter__(self):
         self.start = self.end = time.perf_counter()
@@ -407,10 +412,7 @@ class MailboxIterable:
 
                     if self.ledger and topic == "/receipt":
                         try:
-                            serder = serdering.SerderKERI(raw=msg)
-                            event = eventing.loadEvent(self.hab.db, self.pre, serder.saidb)
-                            self.ledger.publishEvent(event)
-                            
+                            self.queue.pushToQueued(self.pre, msg)
                         except Exception as e:
                             logger.error(f"ledger error: {e}")
                 self.topics[topic] = idx
