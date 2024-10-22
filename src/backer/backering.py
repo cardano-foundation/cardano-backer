@@ -33,7 +33,7 @@ from .constants import REGISTRAR_SEAL_SAID
 logger = help.ogler.getLogger()
 
 
-def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledger=None, queue=None):
+def setupBacker(hby, queue, alias="backer", mbx=None, tcpPort=5631, httpPort=5632):
     """
     Setup Registrar Backer controller and doers
 
@@ -80,7 +80,7 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledg
                             exc=exchanger,
                             rvy=rvy)
 
-    httpEnd = HttpEnd(rxbs=parser.ims, mbx=mbx, hab=hab, ledger=ledger, queue=queue)
+    httpEnd = HttpEnd(rxbs=parser.ims, mbx=mbx, hab=hab, queue=queue)
     app.add_route("/", httpEnd)
 
     server = http.Server(port=httpPort, app=app)
@@ -245,7 +245,7 @@ class HttpEnd:
     TimeoutQNF = 30
     TimeoutMBX = 5
 
-    def __init__(self, rxbs=None, mbx=None, qrycues=None, hab=None, ledger=None, queue=None):
+    def __init__(self, queue, rxbs=None, mbx=None, qrycues=None, hab=None):
         """
         Create the KEL HTTP server from the Habitat with an optional Falcon App to
         register the routes with.
@@ -261,7 +261,6 @@ class HttpEnd:
         self.mbx = mbx
         self.qrycues = qrycues if qrycues is not None else decking.Deck()
         self.hab = hab
-        self.ledger = ledger
         self.queue = queue
 
     def on_post(self, req, rep):
@@ -304,7 +303,7 @@ class HttpEnd:
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
 
-        # Should check when create identifiers only
+        # @TODO - Should allow other methods, and check that backer trait set most recently to Cardano
         if ilk in (Ilks.icp, Ilks.rot):
             backer_identifiers = serder.ked["b"]
 
@@ -341,7 +340,7 @@ class HttpEnd:
             if serder.ked["r"] in ("mbx",):
                 rep.set_header('Content-Type', "text/event-stream")
                 rep.status = falcon.HTTP_200
-                rep.stream = QryRpyMailboxIterable(mbx=self.mbx, cues=self.qrycues, said=serder.said, hab=self.hab,ledger=self.ledger, queue=self.queue)
+                rep.stream = QryRpyMailboxIterable(mbx=self.mbx, cues=self.qrycues, said=serder.said, hab=self.hab, queue=self.queue)
             else:
                 rep.set_header('Content-Type', "application/json")
                 rep.status = falcon.HTTP_204
@@ -349,14 +348,14 @@ class HttpEnd:
 
 class QryRpyMailboxIterable:
 
-    def __init__(self, cues, mbx, said, retry=5000, hab=None, ledger=None, queue=None):
+    def __init__(self, cues, mbx, said, queue, retry=5000, hab=None):
         self.mbx = mbx
         self.retry = retry
         self.cues = cues
         self.said = said
         self.iter = None
         self.hab = hab
-        self.ledger = ledger
+        self.queue = queue   
 
     def __iter__(self):
         return self
@@ -370,7 +369,7 @@ class QryRpyMailboxIterable:
                     kin = cue["kin"]
                     if kin == "stream":
                         self.iter = iter(MailboxIterable(mbx=self.mbx, pre=cue["pre"], topics=cue["topics"],
-                                                         retry=self.retry, hab=self.hab, ledger=self.ledger, queue=self.queue))
+                                                         retry=self.retry, hab=self.hab, queue=self.queue))
                 else:
                     self.cues.append(cue)
             return b''
@@ -380,13 +379,12 @@ class QryRpyMailboxIterable:
 class MailboxIterable:
     TimeoutMBX = 30000000
 
-    def __init__(self, mbx, pre, topics, retry=5000, hab=None, ledger=None, queue=None):
+    def __init__(self, mbx, pre, topics, queue, retry=5000, hab=None):
         self.mbx = mbx
         self.pre = pre
         self.topics = topics
         self.retry = retry
-        self.hab = hab
-        self.ledger = ledger
+        self.hab = hab        
         self.queue = queue
 
     def __iter__(self):
@@ -410,7 +408,7 @@ class MailboxIterable:
                     idx = idx + 1
                     self.start = time.perf_counter()
 
-                    if self.ledger and topic == "/receipt":
+                    if topic == "/receipt":
                         try:
                             self.queue.pushToQueued(self.pre, msg)
                         except Exception as e:

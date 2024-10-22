@@ -87,14 +87,12 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
     hab = hby.habByName(name=alias)
     if hab is None:
         hab = hby.makeHab(name=alias, transferable=False)
-    if ledger == "cardano":
-        ldg = cardaning.Cardano(name=alias, hab=hab, ks=ks)
-        que = queueing.Queueing(hab=hab)
+
+    que = queueing.Queueing(hab=hab)
     backer = backering.setupBacker(alias=alias,
                                           hby=hby,
                                           tcpPort=tcp,
                                           httpPort=http,
-                                          ledger=ldg,
                                           queue=que)
     crl = crawling.Crawler(backer=backer)
     doers = [hbyDoer, crl]
