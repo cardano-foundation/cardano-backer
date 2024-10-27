@@ -1,0 +1,124 @@
+# -*- encoding: utf-8 -*-
+"""
+src.tests.test_queueing module
+
+"""
+import requests
+
+from hio.help import Hict
+from keri.app import habbing
+from keri.app.keeping import openKS, Manager
+from keri.core import coring, eventing, serdering
+from keri.core.coring import (Salter, Siger)
+from keri.core.eventing import query
+from keri.core import serdering
+from keri.db.basing import openDB
+from keri import help
+from backer import queueing
+
+
+def test_push_to_queued():
+    salt = b"0123456789abcdef"
+    salter = coring.Salter(raw=salt)
+
+    with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:
+        hab = hby.makeHab("test01", transferable=False)
+
+        icp = {
+            "v": "KERI10JSON00012b_",
+            "t": "icp",
+            "d": "EIvqOceOSGCMW4Ls-Wdi6t4K3RjKZU_DcHC_Q2w2jNs9",
+            "i": "EIvqOceOSGCMW4Ls-Wdi6t4K3RjKZU_DcHC_Q2w2jNs9",
+            "s": "0",
+            "kt": "1",
+            "k": ["DCwn62HEdsIbb0Tf-xTTR3fxZMQspc4iNbghK93Tfv1m"],
+            "nt": "1",
+            "n": ["EDzxxCBaWkzJ2Azn5HS50DZjslp-HMPeG6vGEm4AW168"],
+            "bt": "0",
+            "b": [],
+            "c": [],
+            "a": [],
+        }
+
+        serder = serdering.SerderKERI(sad=icp, kind=eventing.Serials.json)
+        msg = serder.raw
+
+        queue = queueing.Queueing(hab=hab)
+        queue.pushToQueued(serder.pre, msg)
+
+        # Verify push to queue then get serder from keys
+        assert queue.keldb_queued.get((serder.pre, serder.said)).raw == serder.raw
+
+
+def test_publish():
+    salt = b"0123456789abcdef"
+    salter = coring.Salter(raw=salt)
+
+    with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:     
+        hab = hby.makeHab("test01", transferable=False)      
+
+        icp = {
+            "v": "KERI10JSON00012b_",
+            "t": "icp",
+            "d": "EMUZhB8shDE0I4kSa6Z688320bQwqWP3eZjnRoRJz7vn",
+            "i": "EMUZhB8shDE0I4kSa6Z688320bQwqWP3eZjnRoRJz7vn",
+            "s": "0",
+            "kt": "1",
+            "k": [
+                "DOVGajHFpHgoXB55a9Yn4fpTOTHGZEEjsxXX034OUmhh"
+            ],
+            "nt": "1",
+            "n": [
+                "EOy1p9bw99tDqwLP6pnThrZ2zwKTxZCOqWgwtT6NQ9WY"
+            ],
+            "bt": "0",
+            "b": [],
+            "c": [],
+            "a": []
+        }        
+
+        rot = {
+            "v": "KERI10JSON000160_",
+            "t": "rot",
+            "d": "ELC6knkUz5zhhFgXLBaQ9qW0jvJtD1d911f55_nffl2R",
+            "i": "EMUZhB8shDE0I4kSa6Z688320bQwqWP3eZjnRoRJz7vn",
+            "s": "1",
+            "p": "EMUZhB8shDE0I4kSa6Z688320bQwqWP3eZjnRoRJz7vn",
+            "kt": "1",
+            "k": [
+                "DFq9W4cH7BD77m8NJM2XN4iGz6uoGGQb7KklJNM-AQbG"
+            ],
+            "nt": "1",
+            "n": [
+                "ELwL_SJ_p4WQGDAqYBjEGYjZvJIdHSXOVULaA7N6lZzZ"
+            ],
+            "bt": "0",
+            "br": [],
+            "ba": [],
+            "a": []
+        }
+
+        serder_1 = serdering.SerderKERI(sad=icp, kind=eventing.Serials.json)
+        msg_1 = serder_1.raw
+        serder_2 = serdering.SerderKERI(sad=rot, kind=eventing.Serials.json)
+        msg_2 = serder_2.raw
+
+        queue = queueing.Queueing(hab=hab)
+        queue.pushToQueued(serder_1.pre, msg_1)
+        queue.pushToQueued(serder_2.pre, msg_2)
+
+        # Verify keldb_queued had events
+        keldb_queued_items = [(pre, serder) for (pre, _), serder in queue.keldb_queued.getItemIter()]
+        assert keldb_queued_items != []
+
+        queue.publish()
+
+        # Verify keldb_queued published and remove from keldb_queued
+        keldb_queued_items = [ (pre, serder) for (pre, _), serder in queue.keldb_queued.getItemIter()]
+        assert keldb_queued_items == []
+
+        # Verify event published and keldb_published had events from keldb_queued
+        keldb_published = [(pre, serder) for (pre, _), serder in queue.keldb_published.getItemIter()]
+        assert keldb_published != []
+        assert keldb_published[0][1].said == rot['d']
+        assert keldb_published[1][1].said == icp['d']

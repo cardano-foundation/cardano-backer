@@ -44,9 +44,7 @@ class Cardano:
 
     def __init__(self, name='backer', hab=None, ks=None):
         self.name = name
-        # TODO: pending_kel should change to array
-        self.pending_kel = None
-        self.timer = Timer(QUEUE_DURATION, self.flushQueue)
+        self.pending_kel = bytearray()        
         self.context = pycardano.OgmiosV6ChainContext()
         self.client = ogmios.Client()
 
@@ -64,38 +62,32 @@ class Cardano:
         else:
             self.fundAddress(self.spending_addr)
 
-    def publishEvent(self, event: bytearray):
-        # TODO: Change to the arrays
-        self.pending_kel = event
-        if not self.timer.is_alive():
-            self.timer = Timer(90, self.flushQueue)
-            self.timer.start()
-
+    def publishEvent(self, event: bytes):
+        self.pending_kel = event + self.pending_kel
 
     def flushQueue(self):
-        try:            
-            # Build transaction
-            builder = pycardano.TransactionBuilder(self.context)
-            builder.add_input_address(self.spending_addr)
-            builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
+        try:
+            if self.pending_kel:
+                # Build transaction
+                builder = pycardano.TransactionBuilder(self.context)
+                builder.add_input_address(self.spending_addr)
+                builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
+                self.pending_kel = bytes(self.pending_kel)
+                # Chunk size
+                # bytearrays is not accept
+                value = [self.pending_kel[i:i + 64] for i in range(0, len(self.pending_kel), 64)]
 
-            # Chunk size
-            # bytearrays is not accept
-            self.pending_kel = bytes(self.pending_kel)
-            value = [self.pending_kel[i:i + 64] for i in range(0, len(self.pending_kel), 64)]
+                # Metadata. accept int key type
+                builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({1: value}))
 
-            # Metadata. accept int key type
-            builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({1: value}))
-
-            signed_tx = builder.build_and_sign([self.payment_signing_key],
-                                               change_address=self.spending_addr,
-                                               merge_change=True)
-            # Submit transaction
-            dd = signed_tx.to_cbor()
-            self.context.submit_tx(signed_tx.to_cbor())
-        except Exception as e:
-            self.timer = Timer(90, self.flushQueue)
-            self.timer.start()
+                signed_tx = builder.build_and_sign([self.payment_signing_key],
+                                                change_address=self.spending_addr,
+                                                merge_change=True)
+                # Submit transaction
+                self.context.submit_tx(signed_tx.to_cbor())  
+                self.pending_kel = bytearray()
+        except Exception as e:    
+            logger.critical(f"Error: {e}")
 
     def getaddressBalance(self, addr):
         try:            
