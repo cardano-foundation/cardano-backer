@@ -44,7 +44,7 @@ parser.add_argument('--ledger', '-l', help='Ledger name. Available options: card
                     required=True, default=None)
 
 def launch(args):
-    help.ogler.level = logging.CRITICAL
+    help.ogler.level = logging.DEBUG
     help.ogler.reopen(name=args.name, temp=True, clear=True)
 
     logger = help.ogler.getLogger()
@@ -88,13 +88,15 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
     if hab is None:
         hab = hby.makeHab(name=alias, transferable=False)
 
-    que = queueing.Queueing(hab=hab)
+    ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+
+    que = queueing.Queueing(hab=hab, ledger=ledger)
     backer = backering.setupBacker(alias=alias,
                                           hby=hby,
                                           tcpPort=tcp,
                                           httpPort=http,
                                           queue=que)
-    crl = crawling.Crawler(backer=backer)
+    crl = crawling.Crawler(backer=backer, ledger=ledger)
     doers = [hbyDoer, crl]
 
     directing.runController(doers=doers, expire=expire)

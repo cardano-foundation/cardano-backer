@@ -3,18 +3,10 @@
 src.tests.test_queueing module
 
 """
-import requests
-
-from hio.help import Hict
 from keri.app import habbing
-from keri.app.keeping import openKS, Manager
 from keri.core import coring, eventing, serdering
-from keri.core.coring import (Salter, Siger)
-from keri.core.eventing import query
 from keri.core import serdering
-from keri.db.basing import openDB
-from keri import help
-from backer import queueing
+from backer import queueing, cardaning
 
 
 def test_push_to_queued():
@@ -43,8 +35,10 @@ def test_push_to_queued():
         serder = serdering.SerderKERI(sad=icp, kind=eventing.Serials.json)
         msg = serder.raw
 
-        queue = queueing.Queueing(hab=hab)
+        ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+        queue = queueing.Queueing(hab=hab, ledger=ledger)
         queue.pushToQueued(serder.pre, msg)
+        ledger.emptyPendingKEL()
 
         # Verify push to queue then get serder from keys
         assert queue.keldb_queued.get((serder.pre, serder.said)).raw == serder.raw
@@ -102,10 +96,12 @@ def test_publish():
         msg_1 = serder_1.raw
         serder_2 = serdering.SerderKERI(sad=rot, kind=eventing.Serials.json)
         msg_2 = serder_2.raw
-
-        queue = queueing.Queueing(hab=hab)
-        queue.pushToQueued(serder_1.pre, msg_1)
-        queue.pushToQueued(serder_2.pre, msg_2)
+        
+        ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+        queue = queueing.Queueing(hab=hab, ledger=ledger)
+        ledger.emptyPendingKEL()
+        queue.pushToQueued(serder_1.pre, msg_1)        
+        queue.pushToQueued(serder_2.pre, msg_2)        
 
         # Verify keldb_queued had events
         keldb_queued_items = [(pre, serder) for (pre, _), serder in queue.keldb_queued.getItemIter()]

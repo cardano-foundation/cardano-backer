@@ -33,7 +33,7 @@ services:
       - 5971:5971
       - 5972:5972 
   cardano-node:
-    image: ghcr.io/intersectmbo/cardano-node:9.2.0
+    image: ghcr.io/intersectmbo/cardano-node:10.1.2
     command: [
       "run",
       "--config", "/config/config.json",

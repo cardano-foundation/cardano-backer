@@ -10,11 +10,9 @@ logger = help.ogler.getLogger()
 
 class Queueing(doing.Doer):
 
-    def __init__(self, name='backer', hab=None):
-        self.name = name
-        self.hab = hab
-        # TODO: pending_kel should change to array
-        self.ledger = cardaning.Cardano(name=name, hab=hab, ks=hab.ks)
+    def __init__(self, hab, ledger):
+        self.hab = hab        
+        self.ledger = ledger
         # sub-dbs
         self.keldb_queued = subing.SerderSuber(db=hab.db, subkey="kel_queued")
         self.keldb_published = subing.SerderSuber(db=hab.db, subkey="kel_published")

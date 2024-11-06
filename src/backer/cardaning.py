@@ -7,13 +7,15 @@ Registrar Backer operations on Cardano Ledger
 
 """
 
+import json
 import pycardano
 import os
 import time
 import ogmios
-from threading import Timer
 from  pprint import pp
 from keri import help
+from keri.db import subing
+from datetime import datetime, timezone
 
 logger = help.ogler.getLogger()
 
@@ -24,6 +26,9 @@ MINIMUN_BALANCE = os.environ.get('MINIMUN_BALANCE', 5000000)
 FUNDING_AMOUNT = os.environ.get('FUNDING_AMOUNT', 30000000)
 TRANSACTION_AMOUNT = os.environ.get('TRANSACTION_AMOUNT', 1000000)
 MIN_BLOCK_CONFIRMATIONS = os.environ.get('MIN_BLOCK_CONFIRMATIONS', 3)
+SHELLY_UNIX = os.environ.get('SHELLY_UNIX', 1666656000) #"2022-10-25T00:00:00Z"
+TRANSACTION_DEEP = os.environ.get('TRANSACTION_DEEP', 16)
+TRANSACTION_CONFIRMATION_TIMEOUT = os.environ.get('TRANSACTION_CONFIRMATION_TIMEOUT', 30)
 
 
 class Cardano:
@@ -42,11 +47,12 @@ class Cardano:
         - Optional funding address to fund the backer address
     """
 
-    def __init__(self, name='backer', hab=None, ks=None):
-        self.name = name
+    def __init__(self, hab, ks=None):        
         self.pending_kel = bytearray()        
+        self.keldbConfirming = subing.Suber(db=hab.db, subkey="kel_queued")
         self.context = pycardano.OgmiosV6ChainContext()
-        self.client = ogmios.Client()
+        self.client = ogmios.Client()        
+        self.tipHeight = 0
 
         # retrieve backer private key and derive cardano address
         backer_private_key = ks.pris.get(hab.kever.prefixer.qb64).raw
@@ -59,23 +65,26 @@ class Cardano:
         balance = self.getaddressBalance(self.spending_addr.encode())
         if balance and balance > MINIMUN_BALANCE:
             print("Address balance:", balance/1000000, "ADA")
-        else:
+        else:            
             self.fundAddress(self.spending_addr)
+
+    def updateTip(self, tipHeight):        
+        self.tipHeight = tipHeight
 
     def publishEvent(self, event: bytes):
         self.pending_kel = event + self.pending_kel
 
-    def flushQueue(self):
+    def submitKelTx(self, kel):        
         try:
-            if self.pending_kel:
+            if kel:
                 # Build transaction
                 builder = pycardano.TransactionBuilder(self.context)
                 builder.add_input_address(self.spending_addr)
                 builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
-                self.pending_kel = bytes(self.pending_kel)
+                kel_data = bytes(kel)
                 # Chunk size
                 # bytearrays is not accept
-                value = [self.pending_kel[i:i + 64] for i in range(0, len(self.pending_kel), 64)]
+                value = [kel_data[i:i + 64] for i in range(0, len(kel_data), 64)]
 
                 # Metadata. accept int key type
                 builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({1: value}))
@@ -83,11 +92,69 @@ class Cardano:
                 signed_tx = builder.build_and_sign([self.payment_signing_key],
                                                 change_address=self.spending_addr,
                                                 merge_change=True)
+                
                 # Submit transaction
-                self.context.submit_tx(signed_tx.to_cbor())  
-                self.pending_kel = bytearray()
-        except Exception as e:    
-            logger.critical(f"Error: {e}")
+                self.context.submit_tx(signed_tx.to_cbor())
+                transId = str(signed_tx.transaction_body.inputs[0].transaction_id)
+                trans = {
+                    "id": transId,
+                    "kel": kel.decode('utf-8'),
+                    "publish_time": help.toIso8601()
+                }
+                self.keldbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
+        except Exception as e:
+            logger.critical(f"Cannot submit transaction: {e}")
+
+    def emptyPendingKEL(self):
+        self.pending_kel = bytearray()
+
+    def flushQueue(self):
+        if self.pending_kel is not None and self.pending_kel != b"":
+            self.submitKelTx(self.pending_kel)        
+            self.pending_kel = bytearray()
+
+    def slotToTime(self, slot):
+        timeStamp = SHELLY_UNIX + slot
+        return datetime.fromtimestamp(timeStamp)
+
+    def getConfirmingTrans(self, transId):
+        return self.keldbConfirming.get(transId)
+
+    def confirmTrans(self):
+        try:
+            for keys, item in self.keldbConfirming.getItemIter():
+                if item is None:
+                    continue
+                
+                item = json.loads(item)
+                (blockSlot, blockHeight) = (item["block_slot"], item["block_height"]) if 'block_slot' in item.keys() else (0, 0)
+                publishTime = datetime.fromisoformat(item["publish_time"])
+                onChainTime = help.toIso8601(self.slotToTime(blockSlot))
+                onChainTime = datetime.fromisoformat(onChainTime).replace(tzinfo=timezone.utc)
+                confirmTime = datetime.fromisoformat(help.toIso8601())
+
+                # Check for confirmation
+                if self.tipHeight - int(blockHeight) >= TRANSACTION_DEEP and (onChainTime - publishTime).total_seconds() <= TRANSACTION_CONFIRMATION_TIMEOUT:
+                    self.keldbConfirming.rem(keys)
+                    continue
+
+                if (confirmTime - publishTime).total_seconds() > TRANSACTION_CONFIRMATION_TIMEOUT:
+                    self.submitKelTx(item['kel'].encode('utf-8'))
+                    self.keldbConfirming.rem(keys)
+        except Exception as e:
+            logger.critical(f"Cannot confirm transaction: {e}")
+
+    def updateTrans(self, transId, blockHeight, blockSlot):
+        try:
+            trans = self.keldbConfirming.get(transId)
+
+            if trans:
+                trans = json.loads(trans)
+                trans["block_slot"] = blockSlot
+                trans["block_height"] = blockHeight            
+                self.keldbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
+        except Exception as e:
+            logger.critical(f"Cannot update transaction: {e}")   
 
     def getaddressBalance(self, addr):
         try:            
@@ -95,8 +162,7 @@ class Cardano:
 
             if utxo_list and len(utxo_list[0]) > 0:          
                 utxo = utxo_list[0][0]                
-                return int(utxo.value['ada']['lovelace'])
-            
+                return int(utxo.value['ada']['lovelace'])            
         except Exception as e:
             logger.critical(f"Cannot get address's balance: {e}")
         
@@ -118,7 +184,7 @@ class Cardano:
         print("Funding balance:", int(funding_balance)/1000000,"ADA")
 
         if int(funding_balance) > (FUNDING_AMOUNT + 1000000):
-            try:                                
+            try:
                 builder = pycardano.TransactionBuilder(self.context)
                 builder.add_input_address(funding_addr)
                 builder.add_output(pycardano.TransactionOutput(addr, pycardano.Value.from_primitive([int(FUNDING_AMOUNT/3)])))

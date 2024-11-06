@@ -14,11 +14,12 @@ logger = help.ogler.getLogger()
 
 class Crawler(doing.DoDoer):
 
-    def __init__(self, on_tip=False, backer=None, **kwa):
+    def __init__(self, backer, ledger, on_tip=False, **kwa):
         self.client = ogmios.Client()
         self.backer = backer
         self.on_tip = on_tip
-        doers = [doing.doify(self.crawlBlockDo)]
+        self.ledger = ledger
+        doers = [doing.doify(self.crawlBlockDo), doing.doify(self.confirmTrans)]
         super(Crawler, self).__init__(doers=doers, **kwa)
 
     def crawlBlockDo(self, tymth=None, tock=0.0):
@@ -32,14 +33,25 @@ class Crawler(doing.DoDoer):
             _, _, _ = self.client.find_intersection.execute([tip.to_point()])
 
             while True:
-                direction, tip, block, _ = self.client.next_block.execute()
+                direction, tip, block, _ = self.client.next_block.execute()                
 
                 if direction == ogmios.Direction.forward:
+                    if tip.height:
+                        self.ledger.updateTip(tip.height)
+
                     if not self.on_tip and block.height == tip.height:
                         logger.info(f"Reached tip at slot {block.slot}")
                         self.on_tip = True
                         self.extend(self.backer)
                         self.tock = 1.0
+                    
+                    # Find transactions involving cardano backer
+                    if self.on_tip and isinstance(block, ogmios.Block) and hasattr(block, "transactions"):
+                        for tx in block.transactions:                            
+                            txId = tx['inputs'][0]['transaction']['id']                            
+                            
+                            if self.ledger.getConfirmingTrans(txId) is not None:
+                                self.ledger.updateTrans(txId, block.height, block.slot)
                 else:
                     # TODO: Handle for backward
                     logger.debug("Backward direction")
@@ -49,3 +61,14 @@ class Crawler(doing.DoDoer):
             logger.error(f"ERROR: {ex}")
 
         yield self.tock
+
+    def confirmTrans(self, tymth=None, tock=0.0):
+        self.wind(tymth)
+        self.tock = tock
+        _ = (yield self.tock)
+
+        while True:
+            if self.on_tip and self.ledger:
+                self.ledger.confirmTrans()
+
+            yield self.tock
