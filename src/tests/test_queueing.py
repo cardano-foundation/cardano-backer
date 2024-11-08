@@ -37,8 +37,8 @@ def test_push_to_queued():
 
         ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
         queue = queueing.Queueing(hab=hab, ledger=ledger)
-        queue.pushToQueued(serder.pre, msg)
-        ledger.emptyPendingKEL()
+        queue.pushToQueued(serder.pre, msg)        
+        ledger.pending_kel = bytearray()
 
         # Verify push to queue then get serder from keys
         assert queue.keldb_queued.get((serder.pre, serder.said)).raw == serder.raw
@@ -99,7 +99,7 @@ def test_publish():
         
         ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
         queue = queueing.Queueing(hab=hab, ledger=ledger)
-        ledger.emptyPendingKEL()
+        ledger.pending_kel = bytearray()
         queue.pushToQueued(serder_1.pre, msg_1)        
         queue.pushToQueued(serder_2.pre, msg_2)        
 

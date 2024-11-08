@@ -6,6 +6,7 @@ backer.crawling module
 class to support subcribe tip from ogmios and cardano node
 """
 import ogmios
+import json
 from hio.base import doing
 from keri import help
 
@@ -14,10 +15,10 @@ logger = help.ogler.getLogger()
 
 class Crawler(doing.DoDoer):
 
-    def __init__(self, backer, ledger, on_tip=False, **kwa):
+    def __init__(self, backer, ledger, **kwa):
         self.client = ogmios.Client()
         self.backer = backer
-        self.on_tip = on_tip
+        self.on_tip = False
         self.ledger = ledger
         doers = [doing.doify(self.crawlBlockDo), doing.doify(self.confirmTrans)]
         super(Crawler, self).__init__(doers=doers, **kwa)
@@ -49,9 +50,12 @@ class Crawler(doing.DoDoer):
                     if self.on_tip and isinstance(block, ogmios.Block) and hasattr(block, "transactions"):
                         for tx in block.transactions:                            
                             txId = tx['inputs'][0]['transaction']['id']                            
-                            
-                            if self.ledger.getConfirmingTrans(txId) is not None:
-                                self.ledger.updateTrans(txId, block.height, block.slot)
+                            confirmingTrans = self.ledger.getConfirmingTrans(txId)
+                            if confirmingTrans is not None:
+                                trans = json.loads(trans)
+                                trans["block_slot"] = block.slot
+                                trans["block_height"] = block.height
+                                self.ledger.updateTrans(trans)
                 else:
                     # TODO: Handle for backward
                     logger.debug("Backward direction")

@@ -27,8 +27,8 @@ FUNDING_AMOUNT = os.environ.get('FUNDING_AMOUNT', 30000000)
 TRANSACTION_AMOUNT = os.environ.get('TRANSACTION_AMOUNT', 1000000)
 MIN_BLOCK_CONFIRMATIONS = os.environ.get('MIN_BLOCK_CONFIRMATIONS', 3)
 SHELLY_UNIX = os.environ.get('SHELLY_UNIX', 1666656000) #"2022-10-25T00:00:00Z"
-TRANSACTION_DEEP = os.environ.get('TRANSACTION_DEEP', 16)
-TRANSACTION_CONFIRMATION_TIMEOUT = os.environ.get('TRANSACTION_CONFIRMATION_TIMEOUT', 30)
+TRANSACTION_SECURITY_DEPTH = os.environ.get('TRANSACTION_SECURITY_DEPTH', 16)
+TRANSACTION_CONFIRMATION_TIMEOUT = os.environ.get('TRANSACTION_CONFIRMATION_TIMEOUT', 1800)
 
 
 class Cardano:
@@ -105,9 +105,6 @@ class Cardano:
         except Exception as e:
             logger.critical(f"Cannot submit transaction: {e}")
 
-    def emptyPendingKEL(self):
-        self.pending_kel = bytearray()
-
     def flushQueue(self):
         if self.pending_kel is not None and self.pending_kel != b"":
             self.submitKelTx(self.pending_kel)        
@@ -134,7 +131,7 @@ class Cardano:
                 confirmTime = datetime.fromisoformat(help.toIso8601())
 
                 # Check for confirmation
-                if self.tipHeight - int(blockHeight) >= TRANSACTION_DEEP and (onChainTime - publishTime).total_seconds() <= TRANSACTION_CONFIRMATION_TIMEOUT:
+                if self.tipHeight - int(blockHeight) >= TRANSACTION_SECURITY_DEPTH:
                     self.keldbConfirming.rem(keys)
                     continue
 
@@ -144,17 +141,9 @@ class Cardano:
         except Exception as e:
             logger.critical(f"Cannot confirm transaction: {e}")
 
-    def updateTrans(self, transId, blockHeight, blockSlot):
-        try:
-            trans = self.keldbConfirming.get(transId)
-
-            if trans:
-                trans = json.loads(trans)
-                trans["block_slot"] = blockSlot
-                trans["block_height"] = blockHeight            
-                self.keldbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
-        except Exception as e:
-            logger.critical(f"Cannot update transaction: {e}")   
+    def updateTrans(self, trans):
+        transId = trans['id']
+        self.keldbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
 
     def getaddressBalance(self, addr):
         try:            
