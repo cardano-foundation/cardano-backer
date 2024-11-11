@@ -57,8 +57,9 @@ class Crawler(doing.DoDoer):
                                 trans["block_height"] = block.height
                                 self.ledger.updateTrans(trans)
                 else:
-                    # TODO: Handle for backward
-                    logger.debug("Backward direction")
+                    # Rollback transactions
+                    if self.on_tip and isinstance(block, ogmios.Block):
+                        self.ledger.rollbackTrans(tip.height, block.slot)
 
                 yield self.tock
         except Exception as ex:

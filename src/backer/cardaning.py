@@ -35,9 +35,9 @@ class Cardano:
     """
     Environment variables required:
         - FUNDING_ADDRESS_CBORHEX = Optional, for testing purposes. Private Key of funding address as CBOR Hex. Must be an Enterprice address (no Staking part) as PaymentSigningKeyShelley_ed25519
-    
+
     Additional libraries required:
-        pip install pycardano ogmios 
+        pip install pycardano ogmios
     See Backer designation event: https://github.com/WebOfTrust/keripy/issues/90
 
     Features:
@@ -47,11 +47,11 @@ class Cardano:
         - Optional funding address to fund the backer address
     """
 
-    def __init__(self, hab, ks=None):        
-        self.pending_kel = bytearray()        
+    def __init__(self, hab, ks=None):
+        self.pending_kel = bytearray()
         self.keldbConfirming = subing.Suber(db=hab.db, subkey="kel_queued")
         self.context = pycardano.OgmiosV6ChainContext()
-        self.client = ogmios.Client()        
+        self.client = ogmios.Client()
         self.tipHeight = 0
 
         # retrieve backer private key and derive cardano address
@@ -60,21 +60,21 @@ class Cardano:
         payment_verification_key = pycardano.PaymentVerificationKey.from_signing_key(self.payment_signing_key)
         self.spending_addr = pycardano.Address(payment_part=payment_verification_key.hash(),staking_part=None, network=NETWORK)
         print("Cardano Backer Address:", self.spending_addr.encode())
-        
+
         # check address balance and try to fund if necesary
         balance = self.getaddressBalance(self.spending_addr.encode())
         if balance and balance > MINIMUN_BALANCE:
             print("Address balance:", balance/1000000, "ADA")
-        else:            
+        else:
             self.fundAddress(self.spending_addr)
 
-    def updateTip(self, tipHeight):        
+    def updateTip(self, tipHeight):
         self.tipHeight = tipHeight
 
     def publishEvent(self, event: bytes):
         self.pending_kel = event + self.pending_kel
 
-    def submitKelTx(self, kel):        
+    def submitKelTx(self, kel):
         try:
             if kel:
                 # Build transaction
@@ -92,7 +92,7 @@ class Cardano:
                 signed_tx = builder.build_and_sign([self.payment_signing_key],
                                                 change_address=self.spending_addr,
                                                 merge_change=True)
-                
+
                 # Submit transaction
                 self.context.submit_tx(signed_tx.to_cbor())
                 transId = str(signed_tx.transaction_body.inputs[0].transaction_id)
@@ -107,7 +107,7 @@ class Cardano:
 
     def flushQueue(self):
         if self.pending_kel is not None and self.pending_kel != b"":
-            self.submitKelTx(self.pending_kel)        
+            self.submitKelTx(self.pending_kel)
             self.pending_kel = bytearray()
 
     def slotToTime(self, slot):
@@ -117,12 +117,31 @@ class Cardano:
     def getConfirmingTrans(self, transId):
         return self.keldbConfirming.get(transId)
 
+    def rollbackTrans(self, tipHeight, rollBackSlot):
+        self.updateTip(tipHeight)
+
+        try:
+            for keys, item in self.keldbConfirming.getItemIter():
+                if item is None:
+                    continue
+
+                item = json.loads(item)
+                blockSlot = item["block_slot"]
+
+                if blockSlot > rollBackSlot:
+                    # Remove old trans and resubmit
+                    self.keldbConfirming.rem(keys)
+                    self.submitKelTx(item['kel'].encode('utf-8'))
+
+        except Exception as e:
+            logger.critical(f"Cannot rollback transaction: {e}")
+
     def confirmTrans(self):
         try:
             for keys, item in self.keldbConfirming.getItemIter():
                 if item is None:
                     continue
-                
+
                 item = json.loads(item)
                 (blockSlot, blockHeight) = (item["block_slot"], item["block_height"]) if 'block_slot' in item.keys() else (0, 0)
                 publishTime = datetime.fromisoformat(item["publish_time"])
@@ -146,15 +165,15 @@ class Cardano:
         self.keldbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
 
     def getaddressBalance(self, addr):
-        try:            
-            utxo_list = self.client.query_utxo.execute([ogmios.Address(addr)])       
+        try:
+            utxo_list = self.client.query_utxo.execute([ogmios.Address(addr)])
 
-            if utxo_list and len(utxo_list[0]) > 0:          
-                utxo = utxo_list[0][0]                
-                return int(utxo.value['ada']['lovelace'])            
+            if utxo_list and len(utxo_list[0]) > 0:
+                utxo = utxo_list[0][0]
+                return int(utxo.value['ada']['lovelace'])
         except Exception as e:
             logger.critical(f"Cannot get address's balance: {e}")
-        
+
         return 0
 
     def fundAddress(self, addr):
@@ -165,10 +184,10 @@ class Cardano:
         except KeyError:
             print("Backer address could not be funded. Environment variable FUNDING_ADDRESS_CBORHEX is not set")
             return
-        
+
         fund_addr = funding_addr.encode()
         funding_balance = self.getaddressBalance(fund_addr)
-            
+
         print("Funding address:", funding_addr)
         print("Funding balance:", int(funding_balance)/1000000,"ADA")
 
@@ -177,12 +196,12 @@ class Cardano:
                 builder = pycardano.TransactionBuilder(self.context)
                 builder.add_input_address(funding_addr)
                 builder.add_output(pycardano.TransactionOutput(addr, pycardano.Value.from_primitive([int(FUNDING_AMOUNT/3)])))
-                signed_tx = builder.build_and_sign([funding_payment_signing_key], change_address=funding_addr)                
+                signed_tx = builder.build_and_sign([funding_payment_signing_key], change_address=funding_addr)
                 self.context.submit_tx(signed_tx)
                 print("Funds submitted. Wait...")
-                time.sleep(50)                
+                time.sleep(50)
                 balance = self.getaddressBalance(self.spending_addr.encode())
-                
+
                 if balance:
                     print("Backer balance:",balance/1000000, "ADA")
             except Exception as e:
