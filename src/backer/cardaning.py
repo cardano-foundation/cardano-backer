@@ -143,14 +143,14 @@ class Cardano:
                     continue
 
                 item = json.loads(item)
-                (blockSlot, blockHeight) = (item["block_slot"], item["block_height"]) if 'block_slot' in item.keys() else (0, 0)
+                (blockSlot, blockHeight) = (item["block_slot"], int(item["block_height"])) if 'block_slot' in item.keys() else (0, 0)
                 publishTime = datetime.fromisoformat(item["publish_time"])
                 onChainTime = help.toIso8601(self.slotToTime(blockSlot))
                 onChainTime = datetime.fromisoformat(onChainTime).replace(tzinfo=timezone.utc)
                 confirmTime = datetime.fromisoformat(help.toIso8601())
 
                 # Check for confirmation
-                if self.tipHeight - int(blockHeight) >= TRANSACTION_SECURITY_DEPTH:
+                if self.tipHeight > 0 and blockHeight > 0 and self.tipHeight - blockHeight >= TRANSACTION_SECURITY_DEPTH:
                     self.keldbConfirming.rem(keys)
                     continue
 
