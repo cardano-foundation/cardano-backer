@@ -34,7 +34,7 @@ class Crawler(doing.DoDoer):
             _, _, _ = self.client.find_intersection.execute([tip.to_point()])
 
             while True:
-                direction, tip, block, _ = self.client.next_block.execute()                
+                direction, tip, block, _ = self.client.next_block.execute()
 
                 if direction == ogmios.Direction.forward:
                     if tip.height:
@@ -45,11 +45,11 @@ class Crawler(doing.DoDoer):
                         self.on_tip = True
                         self.extend(self.backer)
                         self.tock = 1.0
-                    
+
                     # Find transactions involving cardano backer
                     if self.on_tip and isinstance(block, ogmios.Block) and hasattr(block, "transactions"):
-                        for tx in block.transactions:                            
-                            txId = tx['inputs'][0]['transaction']['id']                            
+                        for tx in block.transactions:
+                            txId = tx['inputs'][0]['transaction']['id']
                             confirmingTrans = self.ledger.getConfirmingTrans(txId)
                             if confirmingTrans is not None:
                                 trans = json.loads(trans)
@@ -58,8 +58,9 @@ class Crawler(doing.DoDoer):
                                 self.ledger.updateTrans(trans)
                 else:
                     # Rollback transactions
-                    if self.on_tip and isinstance(block, ogmios.Block):
-                        self.ledger.rollbackTrans(tip.height, block.slot)
+                    if isinstance(block, ogmios.Block):
+                        self.ledger.updateTip(tip.height)
+                        self.ledger.rollbackBlock(block.slot)
 
                 yield self.tock
         except Exception as ex:

@@ -11,7 +11,7 @@ logger = help.ogler.getLogger()
 class Queueing(doing.Doer):
 
     def __init__(self, hab, ledger):
-        self.hab = hab        
+        self.hab = hab
         self.ledger = ledger
         # sub-dbs
         self.keldb_queued = subing.SerderSuber(db=hab.db, subkey="kel_queued")
@@ -25,7 +25,7 @@ class Queueing(doing.Doer):
                 do publishEvent
             create in published
             deleted from queued
-        """        
+        """
         for (pre, _), serder in self.keldb_queued.getItemIter():
             try:
                 self.ledger.publishEvent(event=serder.raw)

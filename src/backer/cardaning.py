@@ -28,7 +28,7 @@ TRANSACTION_AMOUNT = os.environ.get('TRANSACTION_AMOUNT', 1000000)
 MIN_BLOCK_CONFIRMATIONS = os.environ.get('MIN_BLOCK_CONFIRMATIONS', 3)
 SHELLY_UNIX = os.environ.get('SHELLY_UNIX', 1666656000) #"2022-10-25T00:00:00Z"
 TRANSACTION_SECURITY_DEPTH = os.environ.get('TRANSACTION_SECURITY_DEPTH', 16)
-TRANSACTION_CONFIRMATION_TIMEOUT = os.environ.get('TRANSACTION_CONFIRMATION_TIMEOUT', 1800)
+TRANSACTION_TIMEOUT_DEPTH = os.environ.get('TRANSACTION_TIMEOUT_DEPTH', 32)
 
 
 class Cardano:
@@ -99,7 +99,7 @@ class Cardano:
                 trans = {
                     "id": transId,
                     "kel": kel.decode('utf-8'),
-                    "publish_time": help.toIso8601()
+                    "tip": self.tipHeight
                 }
                 self.keldbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
         except Exception as e:
@@ -110,16 +110,10 @@ class Cardano:
             self.submitKelTx(self.pending_kel)
             self.pending_kel = bytearray()
 
-    def slotToTime(self, slot):
-        timeStamp = SHELLY_UNIX + slot
-        return datetime.fromtimestamp(timeStamp)
-
     def getConfirmingTrans(self, transId):
         return self.keldbConfirming.get(transId)
 
-    def rollbackTrans(self, tipHeight, rollBackSlot):
-        self.updateTip(tipHeight)
-
+    def rollbackBlock(self, rollBackSlot):
         try:
             for keys, item in self.keldbConfirming.getItemIter():
                 if item is None:
@@ -129,9 +123,10 @@ class Cardano:
                 blockSlot = item["block_slot"]
 
                 if blockSlot > rollBackSlot:
-                    # Remove old trans and resubmit
+                    # Push back to pending KEL to resubmit
+                    self.publishEvent(item['kel'].encode('utf-8'))
                     self.keldbConfirming.rem(keys)
-                    self.submitKelTx(item['kel'].encode('utf-8'))
+
 
         except Exception as e:
             logger.critical(f"Cannot rollback transaction: {e}")
@@ -143,18 +138,15 @@ class Cardano:
                     continue
 
                 item = json.loads(item)
-                (blockSlot, blockHeight) = (item["block_slot"], int(item["block_height"])) if 'block_slot' in item.keys() else (0, 0)
-                publishTime = datetime.fromisoformat(item["publish_time"])
-                onChainTime = help.toIso8601(self.slotToTime(blockSlot))
-                onChainTime = datetime.fromisoformat(onChainTime).replace(tzinfo=timezone.utc)
-                confirmTime = datetime.fromisoformat(help.toIso8601())
+                transTip = int(item["tip"])
+                blockHeight = int(item["block_height"]) if 'block_height' in item.keys() else 0
 
                 # Check for confirmation
                 if self.tipHeight > 0 and blockHeight > 0 and self.tipHeight - blockHeight >= TRANSACTION_SECURITY_DEPTH:
                     self.keldbConfirming.rem(keys)
                     continue
 
-                if (confirmTime - publishTime).total_seconds() > TRANSACTION_CONFIRMATION_TIMEOUT:
+                if self.tipHeight - transTip > TRANSACTION_TIMEOUT_DEPTH:
                     self.submitKelTx(item['kel'].encode('utf-8'))
                     self.keldbConfirming.rem(keys)
         except Exception as e:
