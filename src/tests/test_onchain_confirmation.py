@@ -65,6 +65,8 @@ def test_confirmation():
         trans['tip'] = tipHeight - TRANSACTION_TIMEOUT_DEPTH - 1
         trans['block_height'] = blockHeight
         ledger.updateTrans(trans)
+        ledger.flushQueue()
+        ledger.confirmTrans()
         ledger.confirmTrans()
         confirmingTrans = ledger.getConfirmingTrans(transId)
         newTrans = None
@@ -88,7 +90,7 @@ def test_confirmation():
         newTrans['block_slot'] = tipHeight - 1
         ledger.updateTrans(newTrans)
         ledger.updateTip(tipHeight - 1)
-        ledger.rollbackBlock(tipHeight - 2)
+        ledger.rollbackBlock(tipHeight - 1)
         oldTrans = ledger.getConfirmingTrans(newTransId)
         ledger.flushQueue()
         ledger.confirmTrans()
