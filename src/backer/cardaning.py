@@ -122,7 +122,7 @@ class Cardano:
                 item = json.loads(item)
                 blockSlot = item["block_slot"]
 
-                if blockSlot == rollBackSlot:
+                if blockSlot > rollBackSlot:
                     # Push back to pending KEL to resubmit
                     self.publishEvent(item['kel'].encode('utf-8'))
                     self.keldbConfirming.rem(keys)

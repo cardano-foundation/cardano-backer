@@ -57,8 +57,8 @@ class Crawler(doing.DoDoer):
                                 trans["block_height"] = block.height
                                 self.ledger.updateTrans(trans)
                 else:
-                    # Rollback transactions
-                    if isinstance(block, ogmios.Block):
+                    # Rollback transactions, we receipt a Point instead of a Block in backward direction
+                    if isinstance(block, ogmios.Point):
                         self.ledger.updateTip(tip.height)
                         self.ledger.rollbackBlock(block.slot)
 

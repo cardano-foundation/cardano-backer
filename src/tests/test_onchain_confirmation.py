@@ -90,7 +90,7 @@ def test_confirmation():
         newTrans['block_slot'] = tipHeight - 1
         ledger.updateTrans(newTrans)
         ledger.updateTip(tipHeight - 1)
-        ledger.rollbackBlock(tipHeight - 1)
+        ledger.rollbackBlock(tipHeight - 2)
         oldTrans = ledger.getConfirmingTrans(newTransId)
         ledger.flushQueue()
         ledger.confirmTrans()
