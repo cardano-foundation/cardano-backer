@@ -12,10 +12,8 @@ import pycardano
 import os
 import time
 import ogmios
-from  pprint import pp
 from keri import help
 from keri.db import subing
-from datetime import datetime, timezone
 
 logger = help.ogler.getLogger()
 
@@ -26,9 +24,9 @@ MINIMUN_BALANCE = os.environ.get('MINIMUN_BALANCE', 5000000)
 FUNDING_AMOUNT = os.environ.get('FUNDING_AMOUNT', 30000000)
 TRANSACTION_AMOUNT = os.environ.get('TRANSACTION_AMOUNT', 1000000)
 MIN_BLOCK_CONFIRMATIONS = os.environ.get('MIN_BLOCK_CONFIRMATIONS', 3)
-SHELLY_UNIX = os.environ.get('SHELLY_UNIX', 1666656000) #"2022-10-25T00:00:00Z"
 TRANSACTION_SECURITY_DEPTH = os.environ.get('TRANSACTION_SECURITY_DEPTH', 16)
 TRANSACTION_TIMEOUT_DEPTH = os.environ.get('TRANSACTION_TIMEOUT_DEPTH', 32)
+MAX_TRANSACTION_SIZE = 16380 # 16kB - 4 bytes, Somtimes Ogmios create to a bigger transaction so we decrease 4 bytes to pass that
 
 
 class Cardano:
@@ -48,7 +46,7 @@ class Cardano:
     """
 
     def __init__(self, hab, ks=None):
-        self.pending_kel = bytearray()
+        self.pending_kel = []
         self.keldbConfirming = subing.Suber(db=hab.db, subkey="kel_confirming")
         self.context = pycardano.OgmiosV6ChainContext()
         self.client = ogmios.Client()
@@ -70,43 +68,60 @@ class Cardano:
         self.tipHeight = tipHeight
 
     def publishEvent(self, event: bytes):
-        self.pending_kel = event + self.pending_kel
+        self.pending_kel.insert(0, event)
 
-    def submitKelTx(self, kel):
+    def submitKelTx(self):
         try:
-            if kel:
-                # Build transaction
-                builder = pycardano.TransactionBuilder(self.context)
-                builder.add_input_address(self.funding_addr)
-                builder.add_output(pycardano.TransactionOutput(self.funding_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
-                kel_data = bytes(kel)
-                # Chunk size
-                # bytearrays is not accept
-                value = [kel_data[i:i + 64] for i in range(0, len(kel_data), 64)]
+            if self.pending_kel:
+                kel_data = bytearray()
+                submitting_kel = []
+                trans_size = 0
+                tx_cbor = None
 
-                # Metadata. accept int key type
-                builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({1: value}))
+                for kel_item in self.pending_kel[:]:
+                    kel_size = len(kel_item)
 
-                signed_tx = builder.build_and_sign([self.payment_signing_key],
-                                                change_address=self.funding_addr,
-                                                merge_change=True)
+                    if trans_size + kel_size >= MAX_TRANSACTION_SIZE:
+                        break
 
-                # Submit transaction
-                self.context.submit_tx(signed_tx.to_cbor())
-                transId = str(signed_tx.transaction_body.inputs[0].transaction_id)
-                trans = {
-                    "id": transId,
-                    "kel": kel.decode('utf-8'),
-                    "tip": self.tipHeight
-                }
-                self.keldbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
+                    # Build transaction
+                    builder = pycardano.TransactionBuilder(self.context)
+                    builder.add_input_address(self.spending_addr)
+                    builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
+
+                    submitting_kel.append(kel_item.decode('utf-8'))
+                    kel_data = kel_data + kel_item
+                    kel_data_bytes = bytes(kel_data)
+
+                    # Chunk size
+                    # bytearrays is not accept
+                    value = [kel_data_bytes[i:i + 64] for i in range(0, len(kel_data_bytes), 64)]
+
+                    # Metadata. accept int key type
+                    builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({1: value}))
+                    signed_tx = builder.build_and_sign([self.payment_signing_key],
+                                                    change_address=self.spending_addr,
+                                                    merge_change=True)
+                    tx_cbor = signed_tx.to_cbor()
+                    trans_size = len(tx_cbor)
+                    self.pending_kel.remove(kel_item)
+
+                if tx_cbor:
+                    # Submit transaction
+                    self.context.submit_tx(tx_cbor)
+                    transId = str(signed_tx.transaction_body.inputs[0].transaction_id)
+                    trans = {
+                        "id": transId,
+                        "kel": submitting_kel,
+                        "tip": self.tipHeight
+                    }
+                    self.keldbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
         except Exception as e:
             logger.critical(f"Cannot submit transaction: {e}")
 
     def flushQueue(self):
-        if self.pending_kel is not None and self.pending_kel != b"":
-            self.submitKelTx(self.pending_kel)
-            self.pending_kel = bytearray()
+        if self.pending_kel is not None and len(self.pending_kel) > 0:
+            self.submitKelTx()
 
     def getConfirmingTrans(self, transId):
         return self.keldbConfirming.get(transId)
@@ -122,7 +137,9 @@ class Cardano:
 
                 if blockSlot > rollBackSlot:
                     # Push back to pending KEL to resubmit
-                    self.publishEvent(item['kel'].encode('utf-8'))
+                    for kel_item in item['kel']:
+                        self.publishEvent(kel_item.encode('utf-8'))
+
                     self.keldbConfirming.rem(keys)
 
 
@@ -145,7 +162,9 @@ class Cardano:
                     continue
 
                 if self.tipHeight - transTip > TRANSACTION_TIMEOUT_DEPTH:
-                    self.publishEvent(item['kel'].encode('utf-8'))
+                    for kel_item in item['kel']:
+                        self.publishEvent(kel_item.encode('utf-8'))
+
                     self.keldbConfirming.rem(keys)
         except Exception as e:
             logger.critical(f"Cannot confirm transaction: {e}")

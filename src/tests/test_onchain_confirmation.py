@@ -12,7 +12,6 @@ from keri.core import coring
 from backer import cardaning
 
 
-SHELLY_UNIX = os.environ.get('SHELLY_UNIX', 1666656000)
 TRANSACTION_SECURITY_DEPTH = 16
 TRANSACTION_TIMEOUT_DEPTH = 32
 logger = help.ogler.getLogger()
@@ -26,7 +25,7 @@ def test_confirmation():
         hab = hby.makeHab("test03", transferable=False)
         kel = b'{"v":"KERI10JSON00012b_","t":"icp","d":"ELz6bb998nI6AAeUqrz5VH3KExAHxBWJxEvZFYeT3Gfb","i":"ELz6bb998nI6AAeUqrz5VH3KExAHxBWJxEvZFYeT3Gfb","s":"0","kt":"1","k":["DONml9O3wBfTtqJ2VObpdtFI4O4-uV3vTRxClLUPfAYN"],"nt":"1","n":["EGudxbhGctmGOQS05DJ-M-LryvPYW0RejlJeFsABDaUr"],"bt":"0","b":[],"c":[],"a":[]}-AABAABKtwOi9WupJO2sBNUdulIMW_TNAI-kJHf9lF24SxjavtmiocjjWcAwh405mK5774-wyYI4zqPu2Ylk1FtsRS8O'
         ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
-        ledger.pending_kel = bytearray()
+        ledger.pending_kel = []
         cardaning.TRANSACTION_SECURITY_DEPTH = TRANSACTION_SECURITY_DEPTH
         cardaning.TRANSACTION_TIMEOUT_DEPTH = TRANSACTION_TIMEOUT_DEPTH
 
@@ -35,11 +34,11 @@ def test_confirmation():
         tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH - 1
         # Publish event
         ledger.publishEvent(kel)
-        assert ledger.pending_kel == bytearray(kel)
+        assert ledger.pending_kel == [kel]
 
         # Submit event
         ledger.updateTip(tipHeight - 1)
-        ledger.submitKelTx(kel)
+        ledger.submitKelTx()
         trans = None
 
         for keys, item in ledger.keldbConfirming.getItemIter():
@@ -48,7 +47,7 @@ def test_confirmation():
 
             trans = json.loads(item)
 
-        assert trans['kel'] == kel.decode('utf-8')
+        assert trans['kel'] == [kel.decode('utf-8')]
 
         transId = trans['id']
         ledger.updateTip(tipHeight)
@@ -67,7 +66,7 @@ def test_confirmation():
         ledger.updateTrans(trans)
         ledger.flushQueue()
         ledger.confirmTrans()
-        ledger.confirmTrans()
+        ledger.submitKelTx()
         confirmingTrans = ledger.getConfirmingTrans(transId)
         newTrans = None
 
