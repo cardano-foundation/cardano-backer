@@ -49,24 +49,22 @@ class Cardano:
 
     def __init__(self, hab, ks=None):
         self.pending_kel = bytearray()
-        self.keldbConfirming = subing.Suber(db=hab.db, subkey="kel_queued")
+        self.keldbConfirming = subing.Suber(db=hab.db, subkey="kel_confirming")
         self.context = pycardano.OgmiosV6ChainContext()
         self.client = ogmios.Client()
         self.tipHeight = 0
 
-        # retrieve backer private key and derive cardano address
-        backer_private_key = ks.pris.get(hab.kever.prefixer.qb64).raw
-        self.payment_signing_key = pycardano.PaymentSigningKey(backer_private_key, "PaymentSigningKeyShelley_ed25519", "PaymentSigningKeyShelley_ed25519")
-        payment_verification_key = pycardano.PaymentVerificationKey.from_signing_key(self.payment_signing_key)
-        self.spending_addr = pycardano.Address(payment_part=payment_verification_key.hash(),staking_part=None, network=NETWORK)
-        print("Cardano Backer Address:", self.spending_addr.encode())
+        self.payment_signing_key = pycardano.PaymentSigningKey.from_cbor(os.environ.get('FUNDING_ADDRESS_CBORHEX'))
+        funding_payment_verification_key = pycardano.PaymentVerificationKey.from_signing_key(self.payment_signing_key)
+        self.funding_addr = pycardano.Address(funding_payment_verification_key.hash(), None, network=NETWORK)
+        print("Cardano Backer Spending Address:", self.funding_addr.encode())
 
         # check address balance and try to fund if necesary
-        balance = self.getaddressBalance(self.spending_addr.encode())
+        balance = self.getaddressBalance(self.funding_addr.encode())
         if balance and balance > MINIMUN_BALANCE:
             print("Address balance:", balance/1000000, "ADA")
         else:
-            self.fundAddress(self.spending_addr)
+            print("Address balance:", "n/a", "ADA")
 
     def updateTip(self, tipHeight):
         self.tipHeight = tipHeight
@@ -79,8 +77,8 @@ class Cardano:
             if kel:
                 # Build transaction
                 builder = pycardano.TransactionBuilder(self.context)
-                builder.add_input_address(self.spending_addr)
-                builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
+                builder.add_input_address(self.funding_addr)
+                builder.add_output(pycardano.TransactionOutput(self.funding_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
                 kel_data = bytes(kel)
                 # Chunk size
                 # bytearrays is not accept
@@ -90,7 +88,7 @@ class Cardano:
                 builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({1: value}))
 
                 signed_tx = builder.build_and_sign([self.payment_signing_key],
-                                                change_address=self.spending_addr,
+                                                change_address=self.funding_addr,
                                                 merge_change=True)
 
                 # Submit transaction
@@ -167,40 +165,6 @@ class Cardano:
             logger.critical(f"Cannot get address's balance: {e}")
 
         return 0
-
-    def fundAddress(self, addr):
-        try:
-            funding_payment_signing_key = pycardano.PaymentSigningKey.from_cbor(os.environ.get('FUNDING_ADDRESS_CBORHEX'))
-            funding_payment_verification_key = pycardano.PaymentVerificationKey.from_signing_key(funding_payment_signing_key)
-            funding_addr = pycardano.Address(funding_payment_verification_key.hash(), None, network=NETWORK)
-        except KeyError:
-            print("Backer address could not be funded. Environment variable FUNDING_ADDRESS_CBORHEX is not set")
-            return
-
-        fund_addr = funding_addr.encode()
-        funding_balance = self.getaddressBalance(fund_addr)
-
-        print("Funding address:", funding_addr)
-        print("Funding balance:", int(funding_balance)/1000000,"ADA")
-
-        if int(funding_balance) > (FUNDING_AMOUNT + 1000000):
-            try:
-                builder = pycardano.TransactionBuilder(self.context)
-                builder.add_input_address(funding_addr)
-                builder.add_output(pycardano.TransactionOutput(addr, pycardano.Value.from_primitive([int(FUNDING_AMOUNT/3)])))
-                signed_tx = builder.build_and_sign([funding_payment_signing_key], change_address=funding_addr)
-                self.context.submit_tx(signed_tx)
-                print("Funds submitted. Wait...")
-                time.sleep(50)
-                balance = self.getaddressBalance(self.spending_addr.encode())
-
-                if balance:
-                    print("Backer balance:",balance/1000000, "ADA")
-            except Exception as e:
-                logger.critical(f"Cannot fund backer: {e}")
-        else:
-            print("Insuficient balance to fund backer")
-
 
 def getInfo(alias, hab, ks):
     # # TODO: Implement this later
