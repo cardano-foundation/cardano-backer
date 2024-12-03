@@ -12,7 +12,7 @@ do
 done
 ```
 
-# Run 
+# Run
 
 * Run `kli`:
 `docker run -it keripy/kli --help`
@@ -26,7 +26,7 @@ docker run -it --rm \
   keripy/cardano-backer \
   /src/scripts/generate_funding_cborhex_cardano.py
 ```
-* Setup an `.env` file (you can use `.env.example` file as template) in the root of the git repository and set the `FUNDING_ADDRESS_CBORHEX` using the value from the previous command
+* Setup an `.env` file (you can use `.env.example` file as template) in the root of the git repository and set the `WALLET_ADDRESS_CBORHEX` using the value from the previous command
 * Bring up `cardano-backer` and `cardano-agent`:
 ```
 docker-compose --env-file .env up
