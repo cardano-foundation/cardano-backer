@@ -38,8 +38,8 @@ subcommands:
 Check variables and environmental variables that you can pass to configure the backer.
 
 ## Environment variables
-### `FUNDING_ADDRESS_CBORHEX`
- This is an `OPTIONAL` variable to provide the Private Key of funding address as CBOR Hex. Must be an Enterprice address (no Staking part) as PaymentSigningKeyShelley_ed25519. Note that storing private keys in an environmental variable is highly insecure !
+### `WALLET_ADDRESS_CBORHEX`
+ This environmental variable is used by backer to provide the Private Key of spending address as CBOR Hex. Must be an Enterprice address (no Staking part) as PaymentSigningKeyShelley_ed25519. Note that storing private keys in an environmental variable is highly insecure !
 
 ### `BACKER_CONFIG_DIR`
 This environmental variable is used by `start_backer.sh` script to specify the directory to place the configuration files.

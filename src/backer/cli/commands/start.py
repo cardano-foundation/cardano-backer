@@ -83,7 +83,7 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
         hby = existing.setupHby(name=name, base=base, bran=bran)
 
     hbyDoer = habbing.HaberyDoer(habery=hby)  # setup doer
-    
+
     hab = hby.habByName(name=alias)
     if hab is None:
         hab = hby.makeHab(name=alias, transferable=False)

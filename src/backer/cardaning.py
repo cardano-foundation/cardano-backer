@@ -34,7 +34,7 @@ TRANSACTION_TIMEOUT_DEPTH = os.environ.get('TRANSACTION_TIMEOUT_DEPTH', 32)
 class Cardano:
     """
     Environment variables required:
-        - FUNDING_ADDRESS_CBORHEX = Optional, for testing purposes. Private Key of funding address as CBOR Hex. Must be an Enterprice address (no Staking part) as PaymentSigningKeyShelley_ed25519
+        - WALLET_ADDRESS_CBORHEX = Private Key of funding address as CBOR Hex. Must be an Enterprice address (no Staking part) as PaymentSigningKeyShelley_ed25519
 
     Additional libraries required:
         pip install pycardano ogmios
@@ -54,17 +54,17 @@ class Cardano:
         self.client = ogmios.Client()
         self.tipHeight = 0
 
-        self.payment_signing_key = pycardano.PaymentSigningKey.from_cbor(os.environ.get('FUNDING_ADDRESS_CBORHEX'))
+        self.payment_signing_key = pycardano.PaymentSigningKey.from_cbor(os.environ.get('WALLET_ADDRESS_CBORHEX'))
         funding_payment_verification_key = pycardano.PaymentVerificationKey.from_signing_key(self.payment_signing_key)
         self.funding_addr = pycardano.Address(funding_payment_verification_key.hash(), None, network=NETWORK)
         print("Cardano Backer Spending Address:", self.funding_addr.encode())
 
-        # check address balance and try to fund if necesary
         balance = self.getaddressBalance(self.funding_addr.encode())
         if balance and balance > MINIMUN_BALANCE:
             print("Address balance:", balance/1000000, "ADA")
         else:
-            print("Address balance:", "n/a", "ADA")
+            print("The wallet is empty or insufficient balance detected")
+            exit(1)
 
     def updateTip(self, tipHeight):
         self.tipHeight = tipHeight
@@ -189,7 +189,7 @@ def getInfo(alias, hab, ks):
 
 
     # try:
-    #     funding_payment_signing_key = PaymentSigningKey.from_cbor(os.environ.get('FUNDING_ADDRESS_CBORHEX'))
+    #     funding_payment_signing_key = PaymentSigningKey.from_cbor(os.environ.get('WALLET_ADDRESS_CBORHEX'))
     #     funding_payment_verification_key = PaymentVerificationKey.from_signing_key(funding_payment_signing_key)
     #     funding_addr = Address(funding_payment_verification_key.hash(), None, network=NETWORK).encode()
     #     f_address = api.address(address=funding_addr)

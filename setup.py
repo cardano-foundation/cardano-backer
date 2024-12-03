@@ -5,7 +5,7 @@ from glob import glob
 
 
 setup(
-    name='backer', 
+    name='backer',
     version='0.1',
     license='Apache Software License 2.0',
     description='KERI Cardano Registrar Backer',
