@@ -13,35 +13,11 @@ class Queueing(doing.Doer):
     def __init__(self, hab, ledger):
         self.hab = hab
         self.ledger = ledger
-        # sub-dbs
-        self.keldb_queued = subing.SerderSuber(db=hab.db, subkey="kel_queued")
-        self.keldb_published = subing.SerderSuber(db=hab.db, subkey="kel_published")
         self.tock = os.environ.get('QUEUE_DURATION', 30)  # the job should run daily.
-
-    def publish(self):
-        """
-        doer call run
-            get from queued
-                do publishEvent
-            create in published
-            deleted from queued
-        """
-        for (pre, _), serder in self.keldb_queued.getItemIter():
-            try:
-                self.ledger.publishEvent(event=serder.raw)
-                keys = (pre, serder.said)
-                self.keldb_published.pin(keys=keys, val=serder)
-                self.keldb_queued.rem(keys=keys)
-            except Exception as e:
-                logger.error(str(e))
-                continue
-
-        self.ledger.flushQueue()
-
 
     def recur(self, tyme=None):
         while True:
-            self.publish()
+            self.ledger.publishEvents(self.keldb_queued, self.keldb_published)
             yield self.tock
 
     def pushToQueued(self, pre, msg):
@@ -49,4 +25,4 @@ class Queueing(doing.Doer):
         push even to queued
         """
         serder = serdering.SerderKERI(raw=msg)
-        self.keldb_queued.pin(keys=(pre, serder.said), val=serder)
+        self.ledger.keldb_queued.pin(keys=(pre, serder.said), val=serder)

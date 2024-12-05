@@ -8,8 +8,8 @@ import os
 import json
 from keri import help
 from keri.app import habbing
-from keri.core import coring
-from backer import cardaning
+from keri.core import coring, eventing, serdering
+from backer import cardaning, queueing
 
 
 TRANSACTION_SECURITY_DEPTH = 16
@@ -23,22 +23,38 @@ def test_confirmation():
 
     with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:
         hab = hby.makeHab("test03", transferable=False)
-        kel = b'{"v":"KERI10JSON00012b_","t":"icp","d":"ELz6bb998nI6AAeUqrz5VH3KExAHxBWJxEvZFYeT3Gfb","i":"ELz6bb998nI6AAeUqrz5VH3KExAHxBWJxEvZFYeT3Gfb","s":"0","kt":"1","k":["DONml9O3wBfTtqJ2VObpdtFI4O4-uV3vTRxClLUPfAYN"],"nt":"1","n":["EGudxbhGctmGOQS05DJ-M-LryvPYW0RejlJeFsABDaUr"],"bt":"0","b":[],"c":[],"a":[]}-AABAABKtwOi9WupJO2sBNUdulIMW_TNAI-kJHf9lF24SxjavtmiocjjWcAwh405mK5774-wyYI4zqPu2Ylk1FtsRS8O'
+        icp = {
+            "v": "KERI10JSON00012b_",
+            "t": "icp",
+            "d": "EIvqOceOSGCMW4Ls-Wdi6t4K3RjKZU_DcHC_Q2w2jNs9",
+            "i": "EIvqOceOSGCMW4Ls-Wdi6t4K3RjKZU_DcHC_Q2w2jNs9",
+            "s": "0",
+            "kt": "1",
+            "k": ["DCwn62HEdsIbb0Tf-xTTR3fxZMQspc4iNbghK93Tfv1m"],
+            "nt": "1",
+            "n": ["EDzxxCBaWkzJ2Azn5HS50DZjslp-HMPeG6vGEm4AW168"],
+            "bt": "0",
+            "b": [],
+            "c": [],
+            "a": [],
+        }
+
+        serder = serdering.SerderKERI(sad=icp, kind=eventing.Serials.json)
+        msg = serder.raw
         ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
-        ledger.pending_kel = []
+        ledger.keldb_queued.trim()
+        queue = queueing.Queueing(hab=hab, ledger=ledger)
+        queue.pushToQueued(serder.pre, msg)
         cardaning.TRANSACTION_SECURITY_DEPTH = TRANSACTION_SECURITY_DEPTH
         cardaning.TRANSACTION_TIMEOUT_DEPTH = TRANSACTION_TIMEOUT_DEPTH
 
         # Case: Not enough {TRANSACTION_SECURITY_DEPTH} transactions deep into the blockchain
         blockHeight = 26503120
         tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH - 1
-        # Publish event
-        ledger.publishEvent(kel)
-        assert ledger.pending_kel == [kel]
 
         # Submit event
         ledger.updateTip(tipHeight - 1)
-        ledger.submitKelTx()
+        ledger.publishEvents()
         trans = None
 
         for keys, item in ledger.keldbConfirming.getItemIter():
@@ -47,7 +63,7 @@ def test_confirmation():
 
             trans = json.loads(item)
 
-        assert trans['kel'] == [kel.decode('utf-8')]
+        assert trans['kel'] == [msg.decode('utf-8')]
 
         transId = trans['id']
         ledger.updateTip(tipHeight)
@@ -64,9 +80,8 @@ def test_confirmation():
         trans['tip'] = tipHeight - TRANSACTION_TIMEOUT_DEPTH - 1
         trans['block_height'] = blockHeight
         ledger.updateTrans(trans)
-        ledger.flushQueue()
         ledger.confirmTrans()
-        ledger.submitKelTx()
+        ledger.publishEvents()
         confirmingTrans = ledger.getConfirmingTrans(transId)
         newTrans = None
 
@@ -91,7 +106,7 @@ def test_confirmation():
         ledger.updateTip(tipHeight - 1)
         ledger.rollbackBlock(tipHeight - 2)
         oldTrans = ledger.getConfirmingTrans(newTransId)
-        ledger.flushQueue()
+        ledger.publishEvents()
         ledger.confirmTrans()
 
         # Load new trans

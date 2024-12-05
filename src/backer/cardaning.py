@@ -14,6 +14,7 @@ import time
 import ogmios
 from keri import help
 from keri.db import subing
+from keri.core import serdering
 
 logger = help.ogler.getLogger()
 
@@ -26,7 +27,8 @@ TRANSACTION_AMOUNT = os.environ.get('TRANSACTION_AMOUNT', 1000000)
 MIN_BLOCK_CONFIRMATIONS = os.environ.get('MIN_BLOCK_CONFIRMATIONS', 3)
 TRANSACTION_SECURITY_DEPTH = os.environ.get('TRANSACTION_SECURITY_DEPTH', 16)
 TRANSACTION_TIMEOUT_DEPTH = os.environ.get('TRANSACTION_TIMEOUT_DEPTH', 32)
-MAX_TRANSACTION_SIZE = 16380 # 16kB - 4 bytes, Somtimes Ogmios create to a bigger transaction so we decrease 4 bytes to pass that
+MAX_TRANSACTION_SIZE = 16384
+MAX_TRANSACTION_SIZE_MARGIN = 3 # PyCardano and Ogmios serialize the transaction could result in small variations
 
 
 class Cardano:
@@ -47,6 +49,8 @@ class Cardano:
 
     def __init__(self, hab, ks=None):
         self.pending_kel = []
+        self.keldb_queued = subing.SerderSuber(db=hab.db, subkey="kel_queued")
+        self.keldb_published = subing.SerderSuber(db=hab.db, subkey="kel_published")
         self.keldbConfirming = subing.Suber(db=hab.db, subkey="kel_confirming")
         self.context = pycardano.OgmiosV6ChainContext()
         self.client = ogmios.Client()
@@ -67,61 +71,67 @@ class Cardano:
     def updateTip(self, tipHeight):
         self.tipHeight = tipHeight
 
-    def publishEvent(self, event: bytes):
-        self.pending_kel.insert(0, event)
+    def addToQueue(self, event):
+        serder = serdering.SerderKERI(raw=event)
+        self.keldb_queued.pin(keys=(serder.pre, serder.said), val=serder)
 
-    def submitKelTx(self):
-        try:
-            if self.pending_kel:
-                kel_data = bytearray()
-                submitting_kel = []
-                trans_size = 0
-                tx_cbor = None
+    def publishEvents(self):
+        if self.keldb_queued:
+            kel_data = bytearray()
+            submitting_kel = []
+            submitting_tx_cbor = None
+            temp_tx_cbor = None
 
-                for kel_item in self.pending_kel[:]:
-                    kel_size = len(kel_item)
+            for (pre, _), serder in reversed(list(self.keldb_queued.getItemIter())):
+                keys = (pre, serder.said)
+                event = serder.raw
+                # Build transaction
+                builder = pycardano.TransactionBuilder(self.context)
+                builder.add_input_address(self.spending_addr)
+                builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
+                kel_data = kel_data + event
+                kel_data_bytes = bytes(kel_data)
 
-                    if trans_size + kel_size >= MAX_TRANSACTION_SIZE:
-                        break
+                # Chunk size
+                # bytearrays is not accept
+                value = [kel_data_bytes[i:i + 64] for i in range(0, len(kel_data_bytes), 64)]
 
-                    # Build transaction
-                    builder = pycardano.TransactionBuilder(self.context)
-                    builder.add_input_address(self.spending_addr)
-                    builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
-
-                    submitting_kel.append(kel_item.decode('utf-8'))
-                    kel_data = kel_data + kel_item
-                    kel_data_bytes = bytes(kel_data)
-
-                    # Chunk size
-                    # bytearrays is not accept
-                    value = [kel_data_bytes[i:i + 64] for i in range(0, len(kel_data_bytes), 64)]
-
-                    # Metadata. accept int key type
-                    builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({1: value}))
+                # Metadata. accept int key type
+                builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({1: value}))
+                try:
                     signed_tx = builder.build_and_sign([self.payment_signing_key],
                                                     change_address=self.spending_addr,
                                                     merge_change=True)
-                    tx_cbor = signed_tx.to_cbor()
-                    trans_size = len(tx_cbor)
-                    self.pending_kel.remove(kel_item)
 
-                if tx_cbor:
-                    # Submit transaction
-                    self.context.submit_tx(tx_cbor)
-                    transId = str(signed_tx.transaction_body.inputs[0].transaction_id)
-                    trans = {
-                        "id": transId,
-                        "kel": submitting_kel,
-                        "tip": self.tipHeight
-                    }
-                    self.keldbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
-        except Exception as e:
-            logger.critical(f"Cannot submit transaction: {e}")
+                    if len(signed_tx.to_cbor()) > MAX_TRANSACTION_SIZE - MAX_TRANSACTION_SIZE_MARGIN:
+                        break
 
-    def flushQueue(self):
-        if self.pending_kel is not None and len(self.pending_kel) > 0:
-            self.submitKelTx()
+                    temp_tx_cbor = signed_tx.to_cbor()
+                except pycardano.exception.InvalidTransactionException as e:
+                    if "exceeds the max limit" in str(e):
+                        break
+
+                submitting_tx_cbor = bytes(temp_tx_cbor)
+                submitting_kel.append(event.decode('utf-8'))
+                self.keldb_queued.rem(keys=keys)
+                self.keldb_published.pin(keys=keys, val=serder)
+
+            # Submit transaction
+            try:
+                self.context.submit_tx_cbor(submitting_tx_cbor)
+                transId = str(signed_tx.transaction_body.inputs[0].transaction_id)
+                print(f"submit {transId}: {submitting_tx_cbor}")
+                trans = {
+                    "id": transId,
+                    "kel": submitting_kel,
+                    "tip": self.tipHeight
+                }
+                self.keldbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
+            except Exception as e:
+                logger.critical(f"ERROR: Submit tx: {e}")
+                # Push back to pending KEL to resubmit
+                for rollback_item in submitting_kel:
+                    self.addToQueue(rollback_item.encode('utf-8'))
 
     def getConfirmingTrans(self, transId):
         return self.keldbConfirming.get(transId)
@@ -138,11 +148,9 @@ class Cardano:
                 if blockSlot > rollBackSlot:
                     # Push back to pending KEL to resubmit
                     for kel_item in item['kel']:
-                        self.publishEvent(kel_item.encode('utf-8'))
+                        self.addToQueue(kel_item.encode('utf-8'))
 
                     self.keldbConfirming.rem(keys)
-
-
         except Exception as e:
             logger.critical(f"Cannot rollback transaction: {e}")
 
@@ -163,7 +171,7 @@ class Cardano:
 
                 if self.tipHeight - transTip > TRANSACTION_TIMEOUT_DEPTH:
                     for kel_item in item['kel']:
-                        self.publishEvent(kel_item.encode('utf-8'))
+                        self.addToQueue(kel_item.encode('utf-8'))
 
                     self.keldbConfirming.rem(keys)
         except Exception as e:

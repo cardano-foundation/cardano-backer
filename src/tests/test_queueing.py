@@ -38,10 +38,11 @@ def test_push_to_queued():
         ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
         queue = queueing.Queueing(hab=hab, ledger=ledger)
         queue.pushToQueued(serder.pre, msg)
-        ledger.pending_kel = []
 
         # Verify push to queue then get serder from keys
-        assert queue.keldb_queued.get((serder.pre, serder.said)).raw == serder.raw
+        assert ledger.keldb_queued.get((serder.pre, serder.said)).raw == serder.raw
+        # Clean up test DB
+        ledger.keldb_queued.trim()
 
 
 def test_publish():
@@ -99,22 +100,24 @@ def test_publish():
 
         ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
         queue = queueing.Queueing(hab=hab, ledger=ledger)
-        ledger.pending_kel = []
         queue.pushToQueued(serder_1.pre, msg_1)
         queue.pushToQueued(serder_2.pre, msg_2)
 
         # Verify keldb_queued had events
-        keldb_queued_items = [(pre, serder) for (pre, _), serder in queue.keldb_queued.getItemIter()]
+        keldb_queued_items = [(pre, serder) for (pre, _), serder in ledger.keldb_queued.getItemIter()]
         assert keldb_queued_items != []
 
-        queue.publish()
+        ledger.publishEvents()
 
         # Verify keldb_queued published and remove from keldb_queued
-        keldb_queued_items = [(pre, serder) for (pre, _), serder in queue.keldb_queued.getItemIter()]
+        keldb_queued_items = [(pre, serder) for (pre, _), serder in ledger.keldb_queued.getItemIter()]
         assert keldb_queued_items == []
 
         # Verify event published and keldb_published had events from keldb_queued
-        keldb_published = [(pre, serder) for (pre, _), serder in queue.keldb_published.getItemIter()]
+        keldb_published = [(pre, serder) for (pre, _), serder in ledger.keldb_published.getItemIter()]
         assert keldb_published != []
         assert keldb_published[0][1].said == rot['d']
         assert keldb_published[1][1].said == icp['d']
+        # Clean up test DB
+        ledger.keldb_queued.trim()
+        ledger.keldb_published.trim()
