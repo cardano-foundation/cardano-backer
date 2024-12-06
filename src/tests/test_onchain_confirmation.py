@@ -4,7 +4,7 @@ src.tests.test_onchain_confirmation module
 
 """
 import logging
-import os
+import time
 import json
 from keri import help
 from keri.app import habbing
@@ -75,6 +75,7 @@ def test_confirmation():
 
 
         # Case: Transaction does not appear after {TRANSACTION_TIMEOUT_DEPTH} blocks
+        time.sleep(30)
         tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH - 1
         ledger.updateTip(tipHeight)
         trans['tip'] = tipHeight - TRANSACTION_TIMEOUT_DEPTH - 1
@@ -98,6 +99,7 @@ def test_confirmation():
 
 
         # Case: Rollback transaction
+        time.sleep(30)
         tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH - 1
         ledger.updateTip(tipHeight)
         newTrans['block_height'] = blockHeight
@@ -122,6 +124,7 @@ def test_confirmation():
 
 
         # Case: {TRANSACTION_DEEP} transactions deep into the blockchain
+        time.sleep(30)
         tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH
         ledger.updateTip(tipHeight)
         latestTrans['block_height'] = blockHeight

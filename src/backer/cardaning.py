@@ -22,7 +22,6 @@ QUEUE_DURATION = os.environ.get('QUEUE_DURATION', 60)
 NETWORK_NAME = os.environ.get('NETWORK') if os.environ.get('NETWORK') else 'preview'
 NETWORK = pycardano.Network.MAINNET if os.environ.get('NETWORK') == 'mainnet' else pycardano.Network.TESTNET
 MINIMUN_BALANCE = os.environ.get('MINIMUN_BALANCE', 5000000)
-FUNDING_AMOUNT = os.environ.get('FUNDING_AMOUNT', 30000000)
 TRANSACTION_AMOUNT = os.environ.get('TRANSACTION_AMOUNT', 1000000)
 MIN_BLOCK_CONFIRMATIONS = os.environ.get('MIN_BLOCK_CONFIRMATIONS', 3)
 TRANSACTION_SECURITY_DEPTH = os.environ.get('TRANSACTION_SECURITY_DEPTH', 16)
@@ -57,11 +56,11 @@ class Cardano:
         self.tipHeight = 0
 
         self.payment_signing_key = pycardano.PaymentSigningKey.from_cbor(os.environ.get('WALLET_ADDRESS_CBORHEX'))
-        funding_payment_verification_key = pycardano.PaymentVerificationKey.from_signing_key(self.payment_signing_key)
-        self.funding_addr = pycardano.Address(funding_payment_verification_key.hash(), None, network=NETWORK)
-        print("Cardano Backer Spending Address:", self.funding_addr.encode())
+        payment_verification_key = pycardano.PaymentVerificationKey.from_signing_key(self.payment_signing_key)
+        self.spending_addr = pycardano.Address(payment_verification_key.hash(), None, network=NETWORK)
+        print("Cardano Backer Spending Address:", self.spending_addr.encode())
 
-        balance = self.getaddressBalance(self.funding_addr.encode())
+        balance = self.getaddressBalance(self.spending_addr.encode())
         if balance and balance > MINIMUN_BALANCE:
             print("Address balance:", balance/1000000, "ADA")
         else:
