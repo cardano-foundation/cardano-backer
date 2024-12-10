@@ -120,24 +120,29 @@ class Cardano:
             submitting_tx_cbor = bytes(temp_tx_cbor)
             submitting_kel.append(event.decode('utf-8'))
 
+        if not submitting_tx_cbor:
+            return
         # Submit transaction
+        submitted_trans = None
         try:
             self.context.submit_tx_cbor(submitting_tx_cbor)
             transId = str(signed_tx.transaction_body.inputs[0].transaction_id)
-            trans = {
+            submitted_trans = {
                 "id": transId,
                 "kel": submitting_kel,
                 "tip": self.tipHeight
             }
-            self.keldbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
+        except Exception as e:
+            logger.critical(f"ERROR: Submit tx: {e}")
+
+        # Remove submitted events from queue and add them into published
+        if submitted_trans:
+            self.keldbConfirming.pin(keys=submitted_trans["id"], val=json.dumps(submitted_trans).encode('utf-8'))
 
             for event in submitting_kel:
                 event = event.encode('utf-8')
                 self.addToPublished(event)
                 self.removeFromQueue(event)
-
-        except Exception as e:
-            logger.critical(f"ERROR: Submit tx: {e}")
 
 
     def getConfirmingTrans(self, transId):

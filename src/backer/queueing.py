@@ -17,7 +17,7 @@ class Queueing(doing.Doer):
 
     def recur(self, tyme=None):
         while True:
-            self.ledger.publishEvents(self.keldb_queued, self.keldb_published)
+            self.ledger.publishEvents()
             yield self.tock
 
     def pushToQueued(self, pre, msg):
