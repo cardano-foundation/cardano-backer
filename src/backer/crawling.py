@@ -68,14 +68,14 @@ class Crawler(doing.DoDoer):
                             logger.debug(f"{direction}:\nblock: {block}\ntip:{tip}\n")
                             self.ledger.updateTip(tip.height)
                             self.ledger.rollbackBlock(block.slot)
-                except ConnectionClosedError as ex:
+                except (ConnectionClosedError, EOFError) as ex:
                     logger.critical("Reconnect to ogmios ...")
                     try:
                         self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
                         _, _, _ = self.client.find_intersection.execute([tip.to_point()])
                         self.tock = 0.0
                     except Exception as ex:
-                        logger.critical("Failed to reconnect to ogmios")
+                        logger.critical(f"Failed to reconnect to ogmios: {ex}")
 
                 yield self.tock
         except Exception as ex:
