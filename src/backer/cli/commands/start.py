@@ -44,7 +44,7 @@ parser.add_argument('--ledger', '-l', help='Ledger name. Available options: card
                     required=True, default=None)
 
 def launch(args):
-    help.ogler.level = logging.DEBUG
+    help.ogler.level = logging.CRITICAL
     help.ogler.reopen(name=args.name, temp=True, clear=True)
 
     logger = help.ogler.getLogger()
