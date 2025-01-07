@@ -6,11 +6,7 @@ volumes:
 services:
   cardano-backer:
     restart: unless-stopped
-    platform: linux/amd64
     build:
-      x-bake:
-        platforms:
-          - linux/amd64
       context: .
       target: cardano-backer
     env_file: .env

@@ -15,6 +15,7 @@ import ogmios
 from keri import help
 from keri.db import subing
 from keri.core import serdering
+from backer.constants import METADATUM_LABEL
 
 logger = help.ogler.getLogger()
 
@@ -28,6 +29,8 @@ TRANSACTION_SECURITY_DEPTH = os.environ.get('TRANSACTION_SECURITY_DEPTH', 16)
 TRANSACTION_TIMEOUT_DEPTH = os.environ.get('TRANSACTION_TIMEOUT_DEPTH', 32)
 MAX_TRANSACTION_SIZE = 16384
 MAX_TRANSACTION_SIZE_MARGIN = 3 # PyCardano and Ogmios serialize the transaction could result in small variations
+OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
+OGMIOS_PORT = os.environ.get('OGMIOS_PORT', 1337)
 
 
 class Cardano:
@@ -52,7 +55,7 @@ class Cardano:
         self.keldb_published = subing.SerderSuber(db=hab.db, subkey="kel_published")
         self.keldbConfirming = subing.Suber(db=hab.db, subkey="kel_confirming")
         self.context = pycardano.OgmiosV6ChainContext()
-        self.client = ogmios.Client()
+        self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
         self.tipHeight = 0
 
         self.payment_signing_key = pycardano.PaymentSigningKey.from_cbor(os.environ.get('WALLET_ADDRESS_CBORHEX'))
@@ -103,7 +106,7 @@ class Cardano:
             value = [kel_data_bytes[i:i + 64] for i in range(0, len(kel_data_bytes), 64)]
 
             # Metadata. accept int key type
-            builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({1: value}))
+            builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({METADATUM_LABEL: value}))
             try:
                 signed_tx = builder.build_and_sign([self.payment_signing_key],
                                                 change_address=self.spending_addr,

@@ -5,6 +5,7 @@ backer.crawling module
 
 class to support subcribe tip from ogmios and cardano node
 """
+import os
 import ogmios
 import json
 from hio.base import doing
@@ -13,8 +14,8 @@ from websockets import ConnectionClosedError
 
 
 logger = help.ogler.getLogger()
-OGMIOS_HOST = "localhost"
-OGMIOS_PORT = 1337
+OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
+OGMIOS_PORT = os.environ.get('OGMIOS_PORT', 1337)
 
 class Crawler(doing.DoDoer):
 
