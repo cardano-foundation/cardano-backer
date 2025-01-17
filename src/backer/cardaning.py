@@ -135,6 +135,7 @@ class Cardano:
                 "kel": submitting_kel,
                 "tip": self.tipHeight
             }
+            logger.debug(f"Submitted tx: {submitted_trans}")
         except Exception as e:
             logger.critical(f"ERROR: Submit tx: {e}")
 
