@@ -4,14 +4,13 @@ src.tests.test_queueing module
 
 """
 from keri.app import habbing
-from keri.core import coring, eventing, serdering
-from keri.core import serdering
+from keri.core import coring, eventing, serdering, Salter
 from backer import queueing, cardaning
 
 
 def test_push_to_queued():
     salt = b"0123456789abcdef"
-    salter = coring.Salter(raw=salt)
+    salter = Salter(raw=salt)
 
     with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:
         hab = hby.makeHab("test01", transferable=False)
@@ -32,7 +31,7 @@ def test_push_to_queued():
             "a": [],
         }
 
-        serder = serdering.SerderKERI(sad=icp, kind=eventing.Serials.json)
+        serder = serdering.SerderKERI(sad=icp, kind=eventing.Kinds.json)
         msg = serder.raw
 
         ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
@@ -47,7 +46,7 @@ def test_push_to_queued():
 
 def test_publish():
     salt = b"0123456789abcdef"
-    salter = coring.Salter(raw=salt)
+    salter = Salter(raw=salt)
 
     with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:
         hab = hby.makeHab("test02", transferable=False)
@@ -93,9 +92,9 @@ def test_publish():
             "a": []
         }
 
-        serder_1 = serdering.SerderKERI(sad=icp, kind=eventing.Serials.json)
+        serder_1 = serdering.SerderKERI(sad=icp, kind=eventing.Kinds.json)
         msg_1 = serder_1.raw
-        serder_2 = serdering.SerderKERI(sad=rot, kind=eventing.Serials.json)
+        serder_2 = serdering.SerderKERI(sad=rot, kind=eventing.Kinds.json)
         msg_2 = serder_2.raw
 
         ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
