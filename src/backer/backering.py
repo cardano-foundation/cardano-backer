@@ -377,11 +377,11 @@ class ReceiptEnd(doing.DoDoer):
                 raise falcon.HTTPBadRequest(description=f"{self.hab.pre} is not a valid witness for {pre} event at "
                                                         f"{serder.sn}: wits={wits}")
 
-            self.queue.pushToQueued(serder.pre, msg)
-
             rct = self.hab.receipt(serder)
-
             self.psr.parseOne(bytes(rct))
+
+            evt = self.hab.db.cloneEvtMsg(pre=serder.pre, fn=0, dig=serder.said)
+            self.queue.pushToQueued(serder.pre, bytearray(evt))
 
             rep.set_header('Content-Type', "application/json+cesr")
             rep.status = falcon.HTTP_200

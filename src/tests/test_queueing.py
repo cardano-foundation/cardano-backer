@@ -39,7 +39,7 @@ def test_push_to_queued():
         queue.pushToQueued(serder.pre, msg)
 
         # Verify push to queue then get serder from keys
-        assert ledger.keldb_queued.get((serder.pre, serder.said)).raw == serder.raw
+        assert ledger.keldb_queued.get((serder.pre, serder.said)) == serder.raw.decode('utf-8')
         # Clean up test DB
         ledger.keldb_queued.trim()
 
@@ -115,8 +115,10 @@ def test_publish():
         # Verify event published and keldb_published had events from keldb_queued
         keldb_published = [(pre, serder) for (pre, _), serder in ledger.keldb_published.getItemIter()]
         assert keldb_published != []
-        assert keldb_published[0][1].said == rot['d']
-        assert keldb_published[1][1].said == icp['d']
+        serder_1 = serdering.SerderKERI(raw=keldb_published[0][1].encode('utf-8'))
+        serder_2 = serdering.SerderKERI(raw=keldb_published[1][1].encode('utf-8'))
+        assert serder_1.said == rot['d']
+        assert serder_2.said == icp['d']
         # Clean up test DB
         ledger.keldb_queued.trim()
         ledger.keldb_published.trim()
