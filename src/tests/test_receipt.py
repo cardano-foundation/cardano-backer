@@ -1,6 +1,9 @@
-from keri.core import serdering, eventing
+from keri.core import eventing, serdering, eventing
 from hio.help import Hict
 import requests
+from keri.app.cli.common import existing
+from backer import cardaning
+import os
 
 RECEIPT_ENDPOINT = "http://localhost:5668/receipts"
 
@@ -31,7 +34,67 @@ def test_invalid_event_format():
         )
     assert res.status_code == 500
 
-def test_valid_event_format():
+def test_event_receipt_200():
+        icp = {
+            'v': 'KERI10JSON000159_',
+            't': 'icp',
+            'd': 'EKqG8yMOH-EqppLpsN3RJ_9j5AEJcFt3sEueuain5PR7',
+            'i': 'EKqG8yMOH-EqppLpsN3RJ_9j5AEJcFt3sEueuain5PR7',
+            's': '0',
+            'kt': '1',
+            'k': ['DLRMWlQhxgTKppL8KNOEJdQCOByHOh345mnnjtyLUZOF'],
+            'nt': '1',
+            'n': ['EBYsgaXEITTxpVWneYccdAuOyqTEgmRkB9XRIAcfbaWi'],
+            'bt': '1',
+            'b': ['BCMSnYpxb4mLrQsSIyi6tNOUplbqiKpwFijU7M9RTU1V'],
+            'c': [],
+            'a': []
+        }
+        attachment= bytearray(
+            b'-AABAACAM8fcOHux2rpIr-QRZgVhgM4vviiWTcrOlqAcE_Q9PAKv2o7NcHlJwM4XIz0swetgWXOKzQTewKssAZEQMTcL'
+        )
+        serder = serdering.SerderKERI(sad=icp, kind=eventing.Kinds.json)
+        body = serder.raw
+
+        CESR_CONTENT_TYPE = "application/cesr+json"
+        CESR_ATTACHMENT_HEADER = "CESR-ATTACHMENT"
+        CESR_DESTINATION_HEADER = "CESR-DESTINATION"
+
+        headers = Hict(
+            [
+                ("Content-Type", CESR_CONTENT_TYPE),
+                ("Content-Length", str(len(body))),
+                (CESR_ATTACHMENT_HEADER, bytes(attachment)),
+                (
+                    CESR_DESTINATION_HEADER,
+                    "EKqG8yMOH-EqppLpsN3RJ_9j5AEJcFt3sEueuain5PR7",
+                ),
+            ]
+        )
+
+        res = requests.request(
+            "POST", RECEIPT_ENDPOINT, headers=headers, data=body
+        )
+
+        assert res.status_code == 200
+
+        if res.status_code == 200:
+            name = "backer"
+            bran = ""
+            alias = "backer"
+            base = os.path.join(os.getcwd(), "store")
+
+            hby = existing.setupHby(name=name, base=base, bran=bran)
+            hab = hby.habByName(name=alias)
+            ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+
+            queued_event = ledger.keldb_queued.get((serder.pre, serder.said))
+            queued_serder = serdering.SerderKERI(raw=queued_event.encode('utf-8'))
+
+            assert queued_serder.said == serder.said
+            assert queued_serder.sn == serder.sn
+
+def test_event_receipt_202():
     icp = {
         "v": "KERI10JSON000159_",
         "t": "icp",
