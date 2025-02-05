@@ -1,9 +1,11 @@
+import os
+import time
+import requests
 from keri.core import eventing, serdering, eventing
 from hio.help import Hict
-import requests
 from keri.app.cli.common import existing
 from backer import cardaning
-import os
+
 
 RECEIPT_ENDPOINT = "http://localhost:5668/receipts"
 
@@ -93,6 +95,14 @@ def test_event_receipt_200():
 
             assert queued_serder.said == serder.said
             assert queued_serder.sn == serder.sn
+
+        # Add duplicated event
+        time.sleep(60)
+        res = requests.request(
+            "POST", RECEIPT_ENDPOINT, headers=headers, data=body
+        )
+
+        assert res.status_code == 400 and "already received" in str(res.json())
 
 def test_event_receipt_202():
     icp = {
