@@ -367,12 +367,9 @@ class ReceiptEnd(doing.DoDoer):
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
 
-        # Validate duplicated event
+        # Check duplicated event
         existing_said = self.hab.db.getKeLast(key=dbing.snKey(pre=pre,
                                                         sn=serder.sn))
-        if existing_said:
-            raise falcon.HTTPBadRequest(description=f"already received {pre} event at "
-                                                        f"{serder.sn}")
 
         self.psr.parseOne(ims=bytearray(msg), local=True)
 
@@ -387,8 +384,9 @@ class ReceiptEnd(doing.DoDoer):
             rct = self.hab.receipt(serder)
             self.psr.parseOne(bytes(rct))
 
-            evt = self.hab.db.cloneEvtMsg(pre=serder.pre, fn=0, dig=serder.said)
-            self.queue.pushToQueued(serder.pre, bytearray(evt))
+            if not existing_said:
+                evt = self.hab.db.cloneEvtMsg(pre=serder.pre, fn=0, dig=serder.said)
+                self.queue.pushToQueued(serder.pre, bytearray(evt))
 
             rep.set_header('Content-Type', "application/json+cesr")
             rep.status = falcon.HTTP_200
