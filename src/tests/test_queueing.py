@@ -4,14 +4,13 @@ src.tests.test_queueing module
 
 """
 from keri.app import habbing
-from keri.core import coring, eventing, serdering
-from keri.core import serdering
+from keri.core import coring, eventing, serdering, Salter
 from backer import queueing, cardaning
 
 
 def test_push_to_queued():
     salt = b"0123456789abcdef"
-    salter = coring.Salter(raw=salt)
+    salter = Salter(raw=salt)
 
     with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:
         hab = hby.makeHab("test01", transferable=False)
@@ -32,7 +31,7 @@ def test_push_to_queued():
             "a": [],
         }
 
-        serder = serdering.SerderKERI(sad=icp, kind=eventing.Serials.json)
+        serder = serdering.SerderKERI(sad=icp, kind=eventing.Kinds.json)
         msg = serder.raw
 
         ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
@@ -40,14 +39,14 @@ def test_push_to_queued():
         queue.pushToQueued(serder.pre, msg)
 
         # Verify push to queue then get serder from keys
-        assert ledger.keldb_queued.get((serder.pre, serder.said)).raw == serder.raw
+        assert ledger.keldb_queued.get((serder.pre, serder.said)) == serder.raw.decode('utf-8')
         # Clean up test DB
         ledger.keldb_queued.trim()
 
 
 def test_publish():
     salt = b"0123456789abcdef"
-    salter = coring.Salter(raw=salt)
+    salter = Salter(raw=salt)
 
     with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:
         hab = hby.makeHab("test02", transferable=False)
@@ -93,9 +92,9 @@ def test_publish():
             "a": []
         }
 
-        serder_1 = serdering.SerderKERI(sad=icp, kind=eventing.Serials.json)
+        serder_1 = serdering.SerderKERI(sad=icp, kind=eventing.Kinds.json)
         msg_1 = serder_1.raw
-        serder_2 = serdering.SerderKERI(sad=rot, kind=eventing.Serials.json)
+        serder_2 = serdering.SerderKERI(sad=rot, kind=eventing.Kinds.json)
         msg_2 = serder_2.raw
 
         ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
@@ -116,8 +115,10 @@ def test_publish():
         # Verify event published and keldb_published had events from keldb_queued
         keldb_published = [(pre, serder) for (pre, _), serder in ledger.keldb_published.getItemIter()]
         assert keldb_published != []
-        assert keldb_published[0][1].said == rot['d']
-        assert keldb_published[1][1].said == icp['d']
+        serder_1 = serdering.SerderKERI(raw=keldb_published[0][1].encode('utf-8'))
+        serder_2 = serdering.SerderKERI(raw=keldb_published[1][1].encode('utf-8'))
+        assert serder_1.said == rot['d']
+        assert serder_2.said == icp['d']
         # Clean up test DB
         ledger.keldb_queued.trim()
         ledger.keldb_published.trim()

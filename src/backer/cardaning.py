@@ -51,8 +51,8 @@ class Cardano:
 
     def __init__(self, hab, ks=None):
         self.pending_kel = []
-        self.keldb_queued = subing.SerderSuber(db=hab.db, subkey="kel_queued")
-        self.keldb_published = subing.SerderSuber(db=hab.db, subkey="kel_published")
+        self.keldb_queued = subing.Suber(db=hab.db, subkey="kel_queued")
+        self.keldb_published = subing.Suber(db=hab.db, subkey="kel_published")
         self.keldbConfirming = subing.Suber(db=hab.db, subkey="kel_confirming")
         self.context = pycardano.OgmiosV6ChainContext()
         self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
@@ -75,7 +75,7 @@ class Cardano:
 
     def addToQueue(self, event):
         serder = serdering.SerderKERI(raw=event)
-        self.keldb_queued.pin(keys=(serder.pre, serder.said), val=serder)
+        self.keldb_queued.pin(keys=(serder.pre, serder.said), val=event)
 
     def removeFromQueue(self, event):
         serder = serdering.SerderKERI(raw=event)
@@ -84,7 +84,7 @@ class Cardano:
 
     def addToPublished(self, event):
         serder = serdering.SerderKERI(raw=event)
-        self.keldb_published.pin(keys=(serder.pre, serder.said), val=serder)
+        self.keldb_published.pin(keys=(serder.pre, serder.said), val=event)
 
     def publishEvents(self):
         kel_data = bytearray()
@@ -92,13 +92,12 @@ class Cardano:
         submitting_tx_cbor = None
         temp_tx_cbor = None
 
-        for (_, _), serder in reversed(list(self.keldb_queued.getItemIter())):
-            event = serder.raw
+        for (_, _), event in reversed(list(self.keldb_queued.getItemIter())):
             # Build transaction
             builder = pycardano.TransactionBuilder(self.context)
             builder.add_input_address(self.spending_addr)
             builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
-            kel_data = kel_data + event
+            kel_data = kel_data + event.encode('utf-8')
             kel_data_bytes = bytes(kel_data)
 
             # Chunk size
@@ -121,7 +120,7 @@ class Cardano:
                     break
 
             submitting_tx_cbor = bytes(temp_tx_cbor)
-            submitting_kel.append(event.decode('utf-8'))
+            submitting_kel.append(event)
 
         if not submitting_tx_cbor:
             return
@@ -135,6 +134,7 @@ class Cardano:
                 "kel": submitting_kel,
                 "tip": self.tipHeight
             }
+            logger.debug(f"Submitted tx: {submitted_trans}")
         except Exception as e:
             logger.critical(f"ERROR: Submit tx: {e}")
 

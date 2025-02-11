@@ -25,4 +25,4 @@ class Queueing(doing.Doer):
         push even to queued
         """
         serder = serdering.SerderKERI(raw=msg)
-        self.ledger.keldb_queued.pin(keys=(pre, serder.said), val=serder)
+        self.ledger.keldb_queued.pin(keys=(pre, serder.said), val=msg)

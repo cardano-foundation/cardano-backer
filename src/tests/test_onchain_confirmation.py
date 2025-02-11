@@ -8,7 +8,7 @@ import time
 import json
 from keri import help
 from keri.app import habbing
-from keri.core import coring, eventing, serdering
+from keri.core import eventing, serdering, Salter
 from backer import cardaning, queueing
 
 
@@ -19,7 +19,7 @@ logger = help.ogler.getLogger()
 def test_confirmation():
     help.ogler.resetLevel(level=logging.DEBUG, globally=True)
     salt = b"0123456789abcdef"
-    salter = coring.Salter(raw=salt)
+    salter = Salter(raw=salt)
 
     with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:
         hab = hby.makeHab("test03", transferable=False)
@@ -39,7 +39,7 @@ def test_confirmation():
             "a": [],
         }
 
-        serder = serdering.SerderKERI(sad=icp, kind=eventing.Serials.json)
+        serder = serdering.SerderKERI(sad=icp, kind=eventing.Kinds.json)
         msg = serder.raw
         ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
         ledger.keldb_queued.trim()

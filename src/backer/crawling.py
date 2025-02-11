@@ -59,7 +59,7 @@ class Crawler(doing.DoDoer):
                                 txId = tx['inputs'][0]['transaction']['id']
                                 confirmingTrans = self.ledger.getConfirmingTrans(txId)
                                 if confirmingTrans is not None:
-                                    trans = json.loads(trans)
+                                    trans = json.loads(confirmingTrans)
                                     trans["block_slot"] = block.slot
                                     trans["block_height"] = block.height
                                     self.ledger.updateTrans(trans)
