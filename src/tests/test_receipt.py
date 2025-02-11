@@ -96,6 +96,33 @@ def test_event_receipt_200():
             assert queued_serder.said == serder.said
             assert queued_serder.sn == serder.sn
 
+            # Wait for event to be published
+            timeout = 30
+            start_time = time.time()
+            while True:
+                published_event = ledger.keldb_published.get((serder.pre, serder.said))
+
+                if published_event:
+                    print("Event published")
+                    break
+                else:
+                    print("Waiting for event to be published...")
+
+                if time.time() - start_time > timeout:
+                    print("Timeout")
+                    break
+
+                time.sleep(1)
+
+            res = requests.request(
+                "POST", RECEIPT_ENDPOINT, headers=headers, data=body
+            )
+
+            assert res.status_code == 200
+            # Event is not queued again so It is not published again
+            queued_event = ledger.keldb_queued.get((serder.pre, serder.said))
+            assert queued_event == None
+
 
 def test_event_receipt_202():
     icp = {
