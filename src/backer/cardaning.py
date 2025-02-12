@@ -139,8 +139,8 @@ class Cardano:
             self.keldb_published.pin(keys=(serder.pre, serder.said), val=event)
 
     def publishEvents(self, type=CardanoType.KEL):
-        kel_data = bytearray()
-        submitting_kel = []
+        keri_data = bytearray()
+        submitting_items = []
         submitting_tx_cbor = None
         temp_tx_cbor = None
 
@@ -152,12 +152,12 @@ class Cardano:
             builder = pycardano.TransactionBuilder(self.context)
             builder.add_input_address(self.spending_addr)
             builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
-            kel_data = kel_data + event.encode('utf-8')
-            kel_data_bytes = bytes(kel_data)
+            keri_data = keri_data + event.encode('utf-8')
+            keri_data_bytes = bytes(keri_data)
 
             # Chunk size
             # bytearrays is not accept
-            value = [kel_data_bytes[i:i + 64] for i in range(0, len(kel_data_bytes), 64)]
+            value = [keri_data_bytes[i:i + 64] for i in range(0, len(keri_data_bytes), 64)]
 
             # Metadata. accept int key type
             builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({METADATUM_LABEL: value}))
@@ -175,7 +175,7 @@ class Cardano:
                     break
 
             submitting_tx_cbor = bytes(temp_tx_cbor)
-            submitting_kel.append(event)
+            submitting_items.append(event)
 
         if not submitting_tx_cbor:
             return
@@ -187,7 +187,7 @@ class Cardano:
             submitted_trans = {
                 "id": transId,
                 "type": type.value,
-                "kel": submitting_kel,
+                "keri_raw": submitting_items,
                 "tip": self.tipHeight
             }
             logger.debug(f"Submitted tx: {submitted_trans}")
@@ -198,7 +198,7 @@ class Cardano:
         if submitted_trans:
             dbConfirming.pin(keys=submitted_trans["id"], val=json.dumps(submitted_trans).encode('utf-8'))
 
-            for event in submitting_kel:
+            for event in submitting_items:
                 event = event.encode('utf-8')
                 self.addToPublished(event, type)
                 self.removeFromQueue(event, type)
@@ -224,8 +224,8 @@ class Cardano:
 
                 if blockSlot > rollBackSlot:
                     # Push back to pending KEL to resubmit
-                    for kel_item in item['kel']:
-                        self.addToQueue(kel_item.encode('utf-8'), type=type)
+                    for keri_item in item['keri_raw']:
+                        self.addToQueue(keri_item.encode('utf-8'), type=type)
 
                     dbConfirming.rem(keys)
         except Exception as e:
@@ -248,8 +248,8 @@ class Cardano:
                     continue
 
                 if self.tipHeight - transTip > TRANSACTION_TIMEOUT_DEPTH:
-                    for kel_item in item['kel']:
-                        self.addToQueue(kel_item.encode('utf-8'), type)
+                    for keri_item in item['keri_raw']:
+                        self.addToQueue(keri_item.encode('utf-8'), type)
 
                     dbConfirming.rem(keys)
         except Exception as e:

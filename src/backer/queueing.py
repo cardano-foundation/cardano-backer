@@ -1,4 +1,5 @@
 import os
+import time
 from hio.base import doing
 from keri import help
 from keri.db import subing
@@ -17,7 +18,9 @@ class Queueing(doing.Doer):
 
     def recur(self, tyme=None):
         while True:
-            self.ledger.publishEvents()
+            self.ledger.publishEvents(type=CardanoType.KEL)
+            time.sleep(1)
+            self.ledger.publishEvents(type=CardanoType.SCHEMA)
             yield self.tock
 
     def pushToQueued(self, pre, msg, type=CardanoType.KEL):

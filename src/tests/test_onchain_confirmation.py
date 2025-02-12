@@ -66,7 +66,7 @@ def test_kel_confirmation():
 
             trans = json.loads(item)
 
-        assert trans['kel'] == [msg.decode('utf-8')]
+        assert trans['keri_raw'] == [msg.decode('utf-8')]
 
         transId = trans['id']
         ledger.updateTip(tipHeight)
@@ -186,7 +186,7 @@ def test_schema_confirmation():
 
             trans = json.loads(item)
 
-        assert trans['kel'] == [msg.decode('utf-8')]
+        assert trans['keri_raw'] == [msg.decode('utf-8')]
 
         transId = trans['id']
         ledger.updateTip(tipHeight)

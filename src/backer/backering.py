@@ -574,13 +574,20 @@ class SchemaEnd():
         rep.set_header('Cache-Control', "no-cache")
         rep.set_header('connection', "close")
         data = bytes(req.bounded_stream.read())
+        existing_schemer = None
 
         try:
             schemer = scheming.Schemer(raw=data)
+            existing_schemer = self.hab.db.schema.get(keys=(schemer.said,))
+
+            if not existing_schemer:
+                self.hab.db.schema.pin(keys=(schemer.said,), val=schemer)
+
         except Exception as e:
             logger.error(f"Invalid schema: {e}")
             raise falcon.HTTPBadRequest(description="Invalid schema")
 
-        self.queue.pushToQueued("", schemer.raw, CardanoType.SCHEMA)
+        if not existing_schemer:
+            self.queue.pushToQueued("", schemer.raw, CardanoType.SCHEMA)
 
         rep.status = falcon.HTTP_204
