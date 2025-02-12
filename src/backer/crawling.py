@@ -12,6 +12,8 @@ from hio.base import doing
 from keri import help
 from websockets import ConnectionClosedError
 
+from backer.cardaning import CardanoType
+
 
 logger = help.ogler.getLogger()
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
@@ -24,7 +26,7 @@ class Crawler(doing.DoDoer):
         self.backer = backer
         self.on_tip = False
         self.ledger = ledger
-        doers = [doing.doify(self.crawlBlockDo), doing.doify(self.confirmTrans)]
+        doers = [doing.doify(self.crawlBlockDo), doing.doify(self.confirmKelTrans), doing.doify(self.confirmSchemaTrans)]
         super(Crawler, self).__init__(doers=doers, **kwa)
 
     def crawlBlockDo(self, tymth=None, tock=0.0):
@@ -62,13 +64,15 @@ class Crawler(doing.DoDoer):
                                     trans = json.loads(confirmingTrans)
                                     trans["block_slot"] = block.slot
                                     trans["block_height"] = block.height
-                                    self.ledger.updateTrans(trans)
+                                    item_type = CardanoType(trans["type"])
+                                    self.ledger.updateTrans(trans, item_type)
                     else:
                         # Rollback transactions, we receipt a Point instead of a Block in backward direction
                         if isinstance(block, ogmios.Point):
                             logger.debug(f"{direction}:\nblock: {block}\ntip:{tip}\n")
                             self.ledger.updateTip(tip.height)
-                            self.ledger.rollbackBlock(block.slot)
+                            self.ledger.rollbackBlock(block.slot, type=CardanoType.KEL)
+                            self.ledger.rollbackBlock(block.slot, type=CardanoType.SCHEMA)
                 except (ConnectionClosedError, EOFError) as ex:
                     logger.critical("Reconnect to ogmios ...")
                     try:
@@ -84,7 +88,7 @@ class Crawler(doing.DoDoer):
 
         yield self.tock
 
-    def confirmTrans(self, tymth=None, tock=0.0):
+    def confirmKelTrans(self, tymth=None, tock=0.0):
         self.wind(tymth)
         self.tock = tock
         _ = (yield self.tock)
@@ -92,5 +96,16 @@ class Crawler(doing.DoDoer):
         while True:
             if self.on_tip and self.ledger:
                 self.ledger.confirmTrans()
+
+            yield self.tock
+
+    def confirmSchemaTrans(self, tymth=None, tock=0.0):
+        self.wind(tymth)
+        self.tock = tock
+        _ = (yield self.tock)
+
+        while True:
+            if self.on_tip and self.ledger:
+                self.ledger.confirmTrans(CardanoType.SCHEMA)
 
             yield self.tock

@@ -3,12 +3,13 @@
 src.tests.test_queueing module
 
 """
+import json
 from keri.app import habbing
-from keri.core import coring, eventing, serdering, Salter
+from keri.core import coring, eventing, serdering, Salter, scheming
 from backer import queueing, cardaning
 
 
-def test_push_to_queued():
+def test_push_kel_to_queued():
     salt = b"0123456789abcdef"
     salter = Salter(raw=salt)
 
@@ -44,7 +45,7 @@ def test_push_to_queued():
         ledger.keldb_queued.trim()
 
 
-def test_publish():
+def test_publish_kel():
     salt = b"0123456789abcdef"
     salter = Salter(raw=salt)
 
@@ -122,3 +123,114 @@ def test_publish():
         # Clean up test DB
         ledger.keldb_queued.trim()
         ledger.keldb_published.trim()
+
+def test_push_schema_to_queued():
+    salt = b"0123456789abcdef"
+    salter = Salter(raw=salt)
+
+    with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:
+        hab = hby.makeHab("test01", transferable=False)
+
+        schema = {
+                    "$id": "EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdcczw",
+                    "$schema": "http://json-schema.org/draft-07/schema#",
+                    "type": "object",
+                    "properties": {
+                        "a": {
+                            "type": "string"
+                        },
+                        "b": {
+                            "type": "number"
+                        },
+                        "c": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    }
+                }
+        schemer = scheming.Schemer(raw=json.dumps(schema).encode('utf-8'))
+
+        ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+        queue = queueing.Queueing(hab=hab, ledger=ledger)
+        queue.pushToQueued("", schemer.raw, cardaning.CardanoType.SCHEMA)
+
+        # Verify push to queue then get schema from keys
+        assert ledger.schemadb_queued.get((schemer.said, )) == schemer.raw.decode('utf-8')
+        # Clean up test DB
+        ledger.schemadb_queued.trim()
+
+
+def test_publish_schema():
+    salt = b"0123456789abcdef"
+    salter = Salter(raw=salt)
+
+    with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:
+        hab = hby.makeHab("test02", transferable=False)
+        schema_1 = {
+            "$id": "EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdcczw",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+                "a": {
+                    "type": "string"
+                },
+                "b": {
+                    "type": "number"
+                },
+                "c": {
+                    "type": "string",
+                    "format": "date-time"
+                }
+            }
+        }
+        schema_2 = {
+            "$id": "ENQKl3r1Z6HiLXOD-050aVvKziCWJtXWg3vY2FWUGSxG",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+                "a": {
+                    "type": "object",
+                    "properties": {
+                        "b": {
+                            "type": "number"
+                        },
+                        "c": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    }
+                }
+            }
+        }
+
+        schemer_1 = scheming.Schemer(raw=json.dumps(schema_1).encode('utf-8'))
+        schemer_2 = scheming.Schemer(raw=json.dumps(schema_2).encode('utf-8'))
+        msg_1 = schemer_1.raw
+        msg_2 = schemer_2.raw
+
+        ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+        queue = queueing.Queueing(hab=hab, ledger=ledger)
+        queue.pushToQueued("", msg_1, cardaning.CardanoType.SCHEMA)
+        queue.pushToQueued("", msg_2, cardaning.CardanoType.SCHEMA)
+
+        # Verify schemadb_queued had events
+        schemadb_queued_items = [(said, schemer) for (said, ), schemer in ledger.schemadb_queued.getItemIter()]
+        assert schemadb_queued_items != []
+
+        ledger.publishEvents(type=cardaning.CardanoType.SCHEMA)
+
+        # Verify schemadb_queued published and remove from schemadb_queued
+        schemadb_queued_items = [(said, schemer) for (said, ), schemer in ledger.schemadb_queued.getItemIter()]
+        assert schemadb_queued_items == []
+
+        # Verify event published and schemadb_published had events from schemadb_queued
+        schemadb_published = [(said, schemer) for (said, ), schemer in ledger.schemadb_published.getItemIter()]
+        assert schemadb_published != []
+        print(f"schemadb_published: {schemadb_published}")
+        schemer_1 = scheming.Schemer(raw=schemadb_published[0][1].encode('utf-8'))
+        schemer_2 = scheming.Schemer(raw=schemadb_published[1][1].encode('utf-8'))
+        assert schemer_1.said == schema_1['$id']
+        assert schemer_2.said == schema_2['$id']
+        # Clean up test DB
+        ledger.schemadb_queued.trim()
+        ledger.schemadb_published.trim()
