@@ -16,7 +16,7 @@ import ogmios
 from keri import help
 from keri.db import subing
 from keri.core import serdering, scheming
-from backer.constants import METADATUM_LABEL
+from backer.constants import METADATUM_LABEL_KEL, METADATUM_LABEL_SCHEMA
 
 logger = help.ogler.getLogger()
 
@@ -160,7 +160,8 @@ class Cardano:
             value = [keri_data_bytes[i:i + 64] for i in range(0, len(keri_data_bytes), 64)]
 
             # Metadata. accept int key type
-            builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({METADATUM_LABEL: value}))
+            metadatumLabel = METADATUM_LABEL_KEL if type == CardanoType.KEL else METADATUM_LABEL_SCHEMA
+            builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({metadatumLabel: value}))
             try:
                 signed_tx = builder.build_and_sign([self.payment_signing_key],
                                                 change_address=self.spending_addr,
