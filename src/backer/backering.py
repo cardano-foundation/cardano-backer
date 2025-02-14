@@ -8,7 +8,6 @@ class to support registrar backers
 
 import falcon
 import time
-import json
 import keri.app.oobiing
 
 from hio.base import doing
@@ -574,7 +573,6 @@ class SchemaEnd():
         rep.set_header('Cache-Control', "no-cache")
         rep.set_header('connection', "close")
         data = bytes(req.bounded_stream.read())
-        existing_schemer = None
 
         try:
             schemer = scheming.Schemer(raw=data)
@@ -582,12 +580,9 @@ class SchemaEnd():
 
             if not existing_schemer:
                 self.hab.db.schema.pin(keys=(schemer.said,), val=schemer)
-
-        except Exception as e:
-            logger.error(f"Invalid schema: {e}")
+                self.queue.pushToQueued("", schemer.raw, CardanoType.SCHEMA)
+        except kering.ValidationError as e:
+            logger.debug(f"Error parsing schema: {e}")
             raise falcon.HTTPBadRequest(description="Invalid schema")
-
-        if not existing_schemer:
-            self.queue.pushToQueued("", schemer.raw, CardanoType.SCHEMA)
 
         rep.status = falcon.HTTP_204

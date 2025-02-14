@@ -22,10 +22,12 @@ def test_invalid_schema_format():
         ]
     )
 
+    # Invalid schema format
     res = requests.request(
             "POST", RECEIPT_ENDPOINT, headers=headers, data=schema
         )
     assert res.status_code == 400 and "Invalid schema" in str(res.json())
+
 
 def test_valid_schema_format():
     schema = (b'{"$id":"EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdcczw","$schema":"http://json'
