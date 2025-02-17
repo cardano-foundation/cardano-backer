@@ -107,7 +107,7 @@ def test_publish_kel():
         keldb_queued_items = [(pre, serder) for (pre, _), serder in ledger.keldb_queued.getItemIter()]
         assert keldb_queued_items != []
 
-        ledger.publishEvents()
+        ledger.publishEvents(type=cardaning.CardanoType.KEL)
 
         # Verify keldb_queued published and remove from keldb_queued
         keldb_queued_items = [(pre, serder) for (pre, _), serder in ledger.keldb_queued.getItemIter()]

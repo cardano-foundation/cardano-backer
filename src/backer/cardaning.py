@@ -11,7 +11,6 @@ from enum import Enum
 import json
 import pycardano
 import os
-import time
 import ogmios
 from keri import help
 from keri.db import subing
@@ -113,7 +112,7 @@ class Cardano:
     def updateTip(self, tipHeight):
         self.tipHeight = tipHeight
 
-    def addToQueue(self, event, type=CardanoType.KEL):
+    def addToQueue(self, event, type:CardanoType):
         if type == CardanoType.SCHEMA:
             schemer = scheming.Schemer(raw=event)
             self.schemadb_queued.pin(keys=(schemer.said, ), val=event)
@@ -121,7 +120,7 @@ class Cardano:
             serder = serdering.SerderKERI(raw=event)
             self.keldb_queued.pin(keys=(serder.pre, serder.said), val=event)
 
-    def removeFromQueue(self, event, type=CardanoType.KEL):
+    def removeFromQueue(self, event, type:CardanoType):
         if type == CardanoType.SCHEMA:
             schemer = scheming.Schemer(raw=event)
             self.schemadb_queued.rem(keys=(schemer.said, ))
@@ -130,7 +129,7 @@ class Cardano:
             keys=(serder.pre, serder.said)
             self.keldb_queued.rem(keys=keys)
 
-    def addToPublished(self, event, type=CardanoType.KEL):
+    def addToPublished(self, event, type:CardanoType):
         if type == CardanoType.SCHEMA:
             schemer = scheming.Schemer(raw=event)
             self.schemadb_published.pin(keys=(schemer.said, ), val=event)
@@ -138,7 +137,7 @@ class Cardano:
             serder = serdering.SerderKERI(raw=event)
             self.keldb_published.pin(keys=(serder.pre, serder.said), val=event)
 
-    def publishEvents(self, type=CardanoType.KEL):
+    def publishEvents(self, type:CardanoType):
         keri_data = bytearray()
         submitting_items = []
         submitting_tx_cbor = None
@@ -213,7 +212,7 @@ class Cardano:
 
         return tx
 
-    def rollbackBlock(self, rollBackSlot, type=CardanoType.KEL):
+    def rollbackBlock(self, rollBackSlot, type:CardanoType):
         try:
             dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
             for keys, item in dbConfirming.getItemIter():
@@ -232,7 +231,7 @@ class Cardano:
         except Exception as e:
             logger.critical(f"Cannot rollback transaction: {e}")
 
-    def confirmTrans(self, type=CardanoType.KEL):
+    def confirmTrans(self, type: CardanoType):
         dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
         try:
             for keys, item in dbConfirming.getItemIter():
@@ -256,7 +255,7 @@ class Cardano:
         except Exception as e:
             logger.critical(f"Cannot confirm transaction: {e}")
 
-    def updateTrans(self, trans, type=CardanoType.KEL):
+    def updateTrans(self, trans, type:CardanoType):
         transId = trans['id']
         dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
         dbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))

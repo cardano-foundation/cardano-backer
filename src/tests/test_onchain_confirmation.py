@@ -57,7 +57,7 @@ def test_kel_confirmation():
 
         # Submit event
         ledger.updateTip(tipHeight - 1)
-        ledger.publishEvents()
+        ledger.publishEvents(type=cardaning.CardanoType.KEL)
         trans = None
 
         for keys, item in ledger.keldbConfirming.getItemIter():
@@ -71,8 +71,8 @@ def test_kel_confirmation():
         transId = trans['id']
         ledger.updateTip(tipHeight)
         trans['block_height'] = blockHeight
-        ledger.updateTrans(trans)
-        ledger.confirmTrans()
+        ledger.updateTrans(trans, type=cardaning.CardanoType.KEL)
+        ledger.confirmTrans(type=cardaning.CardanoType.KEL)
         confirmingTrans = ledger.getConfirmingTrans(transId)
         assert confirmingTrans != None
 
@@ -82,10 +82,10 @@ def test_kel_confirmation():
         ledger.updateTip(tipHeight)
         trans['tip'] = tipHeight - TRANSACTION_TIMEOUT_DEPTH - 1
         trans['block_height'] = blockHeight
-        ledger.updateTrans(trans)
-        ledger.confirmTrans()
+        ledger.updateTrans(trans, type=cardaning.CardanoType.KEL)
+        ledger.confirmTrans(type=cardaning.CardanoType.KEL)
         wait_for_updating_utxo()
-        ledger.publishEvents()
+        ledger.publishEvents(type=cardaning.CardanoType.KEL)
 
         confirmingTrans = ledger.getConfirmingTrans(transId)
         newTrans = None
@@ -107,13 +107,13 @@ def test_kel_confirmation():
         ledger.updateTip(tipHeight)
         newTrans['block_height'] = blockHeight
         newTrans['block_slot'] = tipHeight - 1
-        ledger.updateTrans(newTrans)
+        ledger.updateTrans(newTrans, type=cardaning.CardanoType.KEL)
         ledger.updateTip(tipHeight - 1)
-        ledger.rollbackBlock(tipHeight - 2)
+        ledger.rollbackBlock((tipHeight - 2), type=cardaning.CardanoType.KEL)
         oldTrans = ledger.getConfirmingTrans(newTransId)
         wait_for_updating_utxo()
-        ledger.publishEvents()
-        ledger.confirmTrans()
+        ledger.publishEvents(type=cardaning.CardanoType.KEL)
+        ledger.confirmTrans(type=cardaning.CardanoType.KEL)
 
         # Load new trans
         for keys, item in ledger.keldbConfirming.getItemIter():
@@ -131,8 +131,8 @@ def test_kel_confirmation():
         tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH
         ledger.updateTip(tipHeight)
         latestTrans['block_height'] = blockHeight
-        ledger.updateTrans(latestTrans)
-        ledger.confirmTrans()
+        ledger.updateTrans(latestTrans, type=cardaning.CardanoType.KEL)
+        ledger.confirmTrans(type=cardaning.CardanoType.KEL)
         confirmingTrans = ledger.getConfirmingTrans(latestTrans['id'])
         assert confirmingTrans == None
 

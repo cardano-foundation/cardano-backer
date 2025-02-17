@@ -26,7 +26,7 @@ class Crawler(doing.DoDoer):
         self.backer = backer
         self.on_tip = False
         self.ledger = ledger
-        doers = [doing.doify(self.crawlBlockDo), doing.doify(self.confirmKelTrans), doing.doify(self.confirmSchemaTrans)]
+        doers = [doing.doify(self.crawlBlockDo), doing.doify(self.confirmTrans)]
         super(Crawler, self).__init__(doers=doers, **kwa)
 
     def crawlBlockDo(self, tymth=None, tock=0.0):
@@ -88,24 +88,15 @@ class Crawler(doing.DoDoer):
 
         yield self.tock
 
-    def confirmKelTrans(self, tymth=None, tock=0.0):
+    def confirmTrans(self, tymth=None, tock=0.0):
         self.wind(tymth)
         self.tock = tock
         _ = (yield self.tock)
 
         while True:
             if self.on_tip and self.ledger:
-                self.ledger.confirmTrans()
-
-            yield self.tock
-
-    def confirmSchemaTrans(self, tymth=None, tock=0.0):
-        self.wind(tymth)
-        self.tock = tock
-        _ = (yield self.tock)
-
-        while True:
-            if self.on_tip and self.ledger:
+                self.ledger.confirmTrans(CardanoType.KEL)
                 self.ledger.confirmTrans(CardanoType.SCHEMA)
 
             yield self.tock
+
