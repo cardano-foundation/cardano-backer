@@ -7,15 +7,15 @@ Registrar Backer operations on Cardano Ledger
 
 """
 
+from enum import Enum
 import json
 import pycardano
 import os
-import time
 import ogmios
 from keri import help
 from keri.db import subing
-from keri.core import serdering
-from backer.constants import METADATUM_LABEL
+from keri.core import serdering, scheming
+from backer.constants import METADATUM_LABEL_KEL, METADATUM_LABEL_SCHEMA
 
 logger = help.ogler.getLogger()
 
@@ -32,6 +32,24 @@ MAX_TRANSACTION_SIZE_MARGIN = 3 # PyCardano and Ogmios serialize the transaction
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
 OGMIOS_PORT = os.environ.get('OGMIOS_PORT', 1337)
 
+
+class CardanoType(Enum):
+    SCHEMA = "CARDANO_SCHEMA"
+    KEL = "CARDANO_KEL"
+
+
+class CardanoDBType(Enum):
+    QUEUED = "QUEUED"
+    PUBLISHED = "PUBLISHED"
+    CONFIRMING = "CONFIRMING"
+
+class CardanoDBName(Enum):
+    KEL_QUEUED = "kel_queued"
+    KEL_PUBLISHED = "kel_published"
+    KEL_CONFIRMING = "kel_confirming"
+    SCHEMA_QUEUED = "schemadb_queued"
+    SCHEMA_PUBLISHED = "schemadb_published"
+    SCHEMA_CONFIRMING = "schemadb_confirming"
 
 class Cardano:
     """
@@ -51,9 +69,14 @@ class Cardano:
 
     def __init__(self, hab, ks=None):
         self.pending_kel = []
-        self.keldb_queued = subing.Suber(db=hab.db, subkey="kel_queued")
-        self.keldb_published = subing.Suber(db=hab.db, subkey="kel_published")
-        self.keldbConfirming = subing.Suber(db=hab.db, subkey="kel_confirming")
+        self.keldb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_QUEUED.value)
+        self.keldb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_PUBLISHED.value)
+        self.keldbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_CONFIRMING.value)
+
+        self.schemadb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_QUEUED.value)
+        self.schemadb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_PUBLISHED.value)
+        self.schemadbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_CONFIRMING.value)
+
         self.context = pycardano.OgmiosV6ChainContext()
         self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
         self.tipHeight = 0
@@ -70,42 +93,74 @@ class Cardano:
             print("The wallet is empty or insufficient balance detected")
             exit(1)
 
+    def getCardanoDB(self, type, name):
+            if type == CardanoType.SCHEMA:
+                if name == CardanoDBType.QUEUED:
+                    return self.schemadb_queued
+                elif name == CardanoDBType.PUBLISHED:
+                    return self.schemadb_published
+                elif name == CardanoDBType.CONFIRMING:
+                    return self.schemadbConfirming
+            else:
+                if name == CardanoDBType.QUEUED:
+                    return self.keldb_queued
+                elif name == CardanoDBType.PUBLISHED:
+                    return self.keldb_published
+                elif name == CardanoDBType.CONFIRMING:
+                    return self.keldbConfirming
+
     def updateTip(self, tipHeight):
         self.tipHeight = tipHeight
 
-    def addToQueue(self, event):
-        serder = serdering.SerderKERI(raw=event)
-        self.keldb_queued.pin(keys=(serder.pre, serder.said), val=event)
+    def addToQueue(self, event, type:CardanoType):
+        if type == CardanoType.SCHEMA:
+            schemer = scheming.Schemer(raw=event)
+            self.schemadb_queued.pin(keys=(schemer.said, ), val=event)
+        else:
+            serder = serdering.SerderKERI(raw=event)
+            self.keldb_queued.pin(keys=(serder.pre, serder.said), val=event)
 
-    def removeFromQueue(self, event):
-        serder = serdering.SerderKERI(raw=event)
-        keys=(serder.pre, serder.said)
-        self.keldb_queued.rem(keys=keys)
+    def removeFromQueue(self, event, type:CardanoType):
+        if type == CardanoType.SCHEMA:
+            schemer = scheming.Schemer(raw=event)
+            self.schemadb_queued.rem(keys=(schemer.said, ))
+        else:
+            serder = serdering.SerderKERI(raw=event)
+            keys=(serder.pre, serder.said)
+            self.keldb_queued.rem(keys=keys)
 
-    def addToPublished(self, event):
-        serder = serdering.SerderKERI(raw=event)
-        self.keldb_published.pin(keys=(serder.pre, serder.said), val=event)
+    def addToPublished(self, event, type:CardanoType):
+        if type == CardanoType.SCHEMA:
+            schemer = scheming.Schemer(raw=event)
+            self.schemadb_published.pin(keys=(schemer.said, ), val=event)
+        else:
+            serder = serdering.SerderKERI(raw=event)
+            self.keldb_published.pin(keys=(serder.pre, serder.said), val=event)
 
-    def publishEvents(self):
-        kel_data = bytearray()
-        submitting_kel = []
+    def publishEvents(self, type:CardanoType):
+        keri_data = bytearray()
+        submitting_items = []
         submitting_tx_cbor = None
         temp_tx_cbor = None
 
-        for (_, _), event in reversed(list(self.keldb_queued.getItemIter())):
+        db_queued = self.getCardanoDB(type, CardanoDBType.QUEUED)
+        dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
+
+        for _, event in reversed(list(db_queued.getItemIter())):
             # Build transaction
             builder = pycardano.TransactionBuilder(self.context)
             builder.add_input_address(self.spending_addr)
             builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
-            kel_data = kel_data + event.encode('utf-8')
-            kel_data_bytes = bytes(kel_data)
+            keri_data = keri_data + event.encode('utf-8')
+            keri_data_bytes = bytes(keri_data)
 
             # Chunk size
             # bytearrays is not accept
-            value = [kel_data_bytes[i:i + 64] for i in range(0, len(kel_data_bytes), 64)]
+            value = [keri_data_bytes[i:i + 64] for i in range(0, len(keri_data_bytes), 64)]
 
             # Metadata. accept int key type
-            builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({METADATUM_LABEL: value}))
+            metadatumLabel = METADATUM_LABEL_KEL if type == CardanoType.KEL else METADATUM_LABEL_SCHEMA
+            builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({metadatumLabel: value}))
             try:
                 signed_tx = builder.build_and_sign([self.payment_signing_key],
                                                 change_address=self.spending_addr,
@@ -120,7 +175,7 @@ class Cardano:
                     break
 
             submitting_tx_cbor = bytes(temp_tx_cbor)
-            submitting_kel.append(event)
+            submitting_items.append(event)
 
         if not submitting_tx_cbor:
             return
@@ -131,7 +186,8 @@ class Cardano:
             transId = str(signed_tx.transaction_body.inputs[0].transaction_id)
             submitted_trans = {
                 "id": transId,
-                "kel": submitting_kel,
+                "type": type.value,
+                "keri_raw": submitting_items,
                 "tip": self.tipHeight
             }
             logger.debug(f"Submitted tx: {submitted_trans}")
@@ -140,20 +196,26 @@ class Cardano:
 
         # Remove submitted events from queue and add them into published
         if submitted_trans:
-            self.keldbConfirming.pin(keys=submitted_trans["id"], val=json.dumps(submitted_trans).encode('utf-8'))
+            dbConfirming.pin(keys=submitted_trans["id"], val=json.dumps(submitted_trans).encode('utf-8'))
 
-            for event in submitting_kel:
+            for event in submitting_items:
                 event = event.encode('utf-8')
-                self.addToPublished(event)
-                self.removeFromQueue(event)
+                self.addToPublished(event, type)
+                self.removeFromQueue(event, type)
 
 
     def getConfirmingTrans(self, transId):
-        return self.keldbConfirming.get(transId)
+        tx = self.schemadbConfirming.get(transId)
 
-    def rollbackBlock(self, rollBackSlot):
+        if not tx:
+            tx = self.keldbConfirming.get(transId)
+
+        return tx
+
+    def rollbackBlock(self, rollBackSlot, type:CardanoType):
         try:
-            for keys, item in self.keldbConfirming.getItemIter():
+            dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
+            for keys, item in dbConfirming.getItemIter():
                 if item is None:
                     continue
 
@@ -162,16 +224,17 @@ class Cardano:
 
                 if blockSlot > rollBackSlot:
                     # Push back to pending KEL to resubmit
-                    for kel_item in item['kel']:
-                        self.addToQueue(kel_item.encode('utf-8'))
+                    for keri_item in item['keri_raw']:
+                        self.addToQueue(keri_item.encode('utf-8'), type=type)
 
-                    self.keldbConfirming.rem(keys)
+                    dbConfirming.rem(keys)
         except Exception as e:
             logger.critical(f"Cannot rollback transaction: {e}")
 
-    def confirmTrans(self):
+    def confirmTrans(self, type: CardanoType):
+        dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
         try:
-            for keys, item in self.keldbConfirming.getItemIter():
+            for keys, item in dbConfirming.getItemIter():
                 if item is None:
                     continue
 
@@ -181,20 +244,21 @@ class Cardano:
 
                 # Check for confirmation
                 if self.tipHeight > 0 and blockHeight > 0 and self.tipHeight - blockHeight >= TRANSACTION_SECURITY_DEPTH:
-                    self.keldbConfirming.rem(keys)
+                    dbConfirming.rem(keys)
                     continue
 
                 if self.tipHeight - transTip > TRANSACTION_TIMEOUT_DEPTH:
-                    for kel_item in item['kel']:
-                        self.addToQueue(kel_item.encode('utf-8'))
+                    for keri_item in item['keri_raw']:
+                        self.addToQueue(keri_item.encode('utf-8'), type)
 
-                    self.keldbConfirming.rem(keys)
+                    dbConfirming.rem(keys)
         except Exception as e:
             logger.critical(f"Cannot confirm transaction: {e}")
 
-    def updateTrans(self, trans):
+    def updateTrans(self, trans, type:CardanoType):
         transId = trans['id']
-        self.keldbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
+        dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
+        dbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
 
     def getaddressBalance(self, addr):
         try:

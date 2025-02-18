@@ -12,6 +12,8 @@ from hio.base import doing
 from keri import help
 from websockets import ConnectionClosedError
 
+from backer.cardaning import CardanoType
+
 
 logger = help.ogler.getLogger()
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
@@ -62,13 +64,15 @@ class Crawler(doing.DoDoer):
                                     trans = json.loads(confirmingTrans)
                                     trans["block_slot"] = block.slot
                                     trans["block_height"] = block.height
-                                    self.ledger.updateTrans(trans)
+                                    item_type = CardanoType(trans["type"])
+                                    self.ledger.updateTrans(trans, item_type)
                     else:
                         # Rollback transactions, we receipt a Point instead of a Block in backward direction
                         if isinstance(block, ogmios.Point):
                             logger.debug(f"{direction}:\nblock: {block}\ntip:{tip}\n")
                             self.ledger.updateTip(tip.height)
-                            self.ledger.rollbackBlock(block.slot)
+                            self.ledger.rollbackBlock(block.slot, type=CardanoType.KEL)
+                            self.ledger.rollbackBlock(block.slot, type=CardanoType.SCHEMA)
                 except (ConnectionClosedError, EOFError) as ex:
                     logger.critical("Reconnect to ogmios ...")
                     try:
@@ -91,6 +95,8 @@ class Crawler(doing.DoDoer):
 
         while True:
             if self.on_tip and self.ledger:
-                self.ledger.confirmTrans()
+                self.ledger.confirmTrans(CardanoType.KEL)
+                self.ledger.confirmTrans(CardanoType.SCHEMA)
 
             yield self.tock
+

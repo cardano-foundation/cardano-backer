@@ -16,13 +16,15 @@ from hio.core.tcp import serving
 from hio.help import decking
 from keri.app import directing, storing, httping, forwarding, oobiing
 from keri import help, kering
-from keri.core import serdering, eventing, parsing, routing, Counter, Codens
+from keri.core import serdering, eventing, parsing, routing, Counter, Codens, scheming
 from keri.core.coring import Ilks
 from keri.db import basing, dbing
 from keri.end import ending
 from keri.peer import exchanging
 from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
+
+from backer.cardaning import CardanoType
 
 logger = help.ogler.getLogger()
 
@@ -79,6 +81,9 @@ def setupBacker(hby, queue, alias="backer", mbx=None, tcpPort=5631, httpPort=563
 
     receiptEnd = ReceiptEnd(hab=hab, queue=queue, inbound=cues)
     app.add_route("/receipts", receiptEnd)
+
+    schemaEnd = SchemaEnd(hab=hab, queue=queue)
+    app.add_route("/schemas", schemaEnd)
 
     server = http.Server(port=httpPort, app=app)
     httpServerDoer = http.ServerDoer(server=server)
@@ -553,3 +558,31 @@ class MailboxIterable:
             return data
 
         raise StopIteration
+
+
+class SchemaEnd():
+    def __init__(self, hab, queue):
+        self.hab = hab
+        self.queue = queue
+
+    def on_post(self, req: falcon.Request, rep: falcon.Response):
+        if req.method == "OPTIONS":
+            rep.status = falcon.HTTP_200
+            return
+
+        rep.set_header('Cache-Control', "no-cache")
+        rep.set_header('connection', "close")
+        data = bytes(req.bounded_stream.read())
+
+        try:
+            schemer = scheming.Schemer(raw=data)
+            existing_schemer = self.hab.db.schema.get(keys=(schemer.said,))
+
+            if not existing_schemer:
+                self.hab.db.schema.pin(keys=(schemer.said,), val=schemer)
+                self.queue.pushToQueued("", schemer.raw, CardanoType.SCHEMA)
+        except kering.ValidationError as e:
+            logger.debug(f"Error parsing schema: {e}")
+            raise falcon.HTTPBadRequest(description="Invalid schema")
+
+        rep.status = falcon.HTTP_204
