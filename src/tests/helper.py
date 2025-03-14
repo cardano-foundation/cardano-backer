@@ -18,7 +18,7 @@ DEVNET_OGMIOS_PORT = 1337
 START_SERVICE_TIMEOUT = 30
 YACI_CLI_SCRIPT = "yaci-cli"
 START_DEVNET_SCRIPT = "start-devnet.sh"
-YACI_DOWNLOAD_SCRIPT = "download.sh"
+YACI_DOWNLOAD_SCRIPT = "download-components.sh"
 STOP_DEVNET_SCRIPT = "stop-devnet.sh"
 START_BACKER_SCRIPT = "start_backer.sh"
 
