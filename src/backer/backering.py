@@ -548,11 +548,6 @@ class MailboxIterable:
                     idx = idx + 1
                     self.start = time.perf_counter()
 
-                    if topic == "/receipt":
-                        try:
-                            self.queue.pushToQueued(self.pre, msg)
-                        except Exception as e:
-                            logger.error(f"ledger error: {e}")
                 self.topics[topic] = idx
             self.end = time.perf_counter()
             return data
