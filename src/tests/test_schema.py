@@ -4,11 +4,11 @@ from keri.core import scheming
 from hio.help import Hict
 from keri.app.cli.common import existing
 from backer import cardaning
-from tests.helper import DevnetBase, BACKER_TEST_STORE_DIR, BACKER_TEST_PORT
+from tests.helper import TestBase, BACKER_TEST_STORE_DIR, BACKER_TEST_PORT
 
 RECEIPT_ENDPOINT = f"http://localhost:{BACKER_TEST_PORT}/schemas"
 
-class TestSchema(DevnetBase):
+class TestSchema(TestBase):
     def test_invalid_schema_format(cls):
 
         schema = (b'{"$id":"EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdccza","$schema":"http://json'

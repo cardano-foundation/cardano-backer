@@ -15,20 +15,31 @@ BACKER_TEST_TPORT = 5667
 WALLET_ADDRESS_CBORHEX = "5820339f8d1757c2c19ba62146d98400be157cdbbe149a4200bd9cc68ef457c201f8"
 
 DEVNET_OGMIOS_PORT = 1337
+DEVNET_PROCESS_PATH = ".yaci-cli/components/ogmios/bin/ogmios"
 START_SERVICE_TIMEOUT = 30
-YACI_CLI_SCRIPT = "yaci-cli"
-START_DEVNET_SCRIPT = "start-devnet.sh"
-YACI_DOWNLOAD_SCRIPT = "download-components.sh"
-STOP_DEVNET_SCRIPT = "stop-devnet.sh"
 START_BACKER_SCRIPT = "start_backer.sh"
 
-def is_process_running(proc_name):
-    """Check if a process with the given name is running using `pgrep` (Linux/macOS)."""
+
+def is_process_running(proc_path, proc_port):
+    """Check if the process is running and includes the expected port argument"""
     try:
-        result = subprocess.run(["pgrep", "-x", proc_name], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        return result.returncode == 0  # `pgrep` returns 0 if process is found
-    except FileNotFoundError:
+        # Get process details (works on Linux & macOS)
+        cmd = ["ps", "-eo", "pid,comm,args"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        output = result.stdout.strip()
+
+        proc_port_arg = f"--port {proc_port}"
+
+        for line in output.split("\n"):
+            if proc_path in line and proc_port_arg in line:
+                return True  # Process is running and has the correct port argument
+
+        return False  # Process is not running or wrong port
+
+    except Exception as e:
+        logger.critical(f"Error: {e}")
         return False
+
 
 def wait_for_port(port, host="0.0.0.0", timeout=START_SERVICE_TIMEOUT, check_interval=2):
     start_time = time.time()
@@ -38,57 +49,14 @@ def wait_for_port(port, host="0.0.0.0", timeout=START_SERVICE_TIMEOUT, check_int
             s.settimeout(1)
             result = s.connect_ex((host, port))
             if result == 0:
-                print(f"Port {port} is now LISTENING.")
+                logger.info(f"Port {port} is now LISTENING.")
                 return True
-        print(f"Waiting for port {port} to be available...")
+        logger.info(f"Waiting for port {port} to be available...")
         time.sleep(check_interval)
 
-    print(f"Timeout: Port {port} is still not available after {timeout} seconds.")
+    logger.info(f"Timeout: Port {port} is still not available after {timeout} seconds.")
     return False
 
-class YaciDevnet:
-    def __init__(self, dir_path=None):
-        if dir_path:
-            self.dir_path = dir_path
-        else:
-            self.dir_path = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir, os.pardir, YACI_CLI_SCRIPT))
-
-        self.download_components_path = os.path.abspath(os.path.join(self.dir_path, YACI_DOWNLOAD_SCRIPT))
-        self.start_devnet_path = os.path.abspath(os.path.join(self.dir_path, START_DEVNET_SCRIPT))
-        self.stop_devnet_path = os.path.abspath(os.path.join(self.dir_path, STOP_DEVNET_SCRIPT))
-
-    def download_components(self):
-        try:
-            subprocess.run(["bash", self.download_components_path], check=True)
-        except subprocess.CalledProcessError as e:
-            logger.critical("Download components failed:\n", e)
-
-    def start_devnet(self):
-        """Start the script in the background"""
-
-        process_check = "start-devnet"
-
-        if is_process_running(process_check):
-            self.stop_devnet()  # Stop the devnet if it's already running
-            time.sleep(2)  # Wait for the devnet to stop
-
-        try:
-            self.download_components()
-            self.process = subprocess.Popen(["bash", self.start_devnet_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            wait_for_port(DEVNET_OGMIOS_PORT)  # Wait for the devnet to start listening
-            logger.info(f"Yaci cli started in background with PID: {self.process.pid}")
-        except Exception as e:
-            logger.critical("Start devnet failed:\n%s", e)
-
-    def stop_devnet(self):
-        """Stop the devnet"""
-        try:
-            self.process = subprocess.Popen(["bash", self.stop_devnet_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            logger.info(f"Script started in background with PID: {self.process.pid}")
-            time.sleep(1)
-            logger.info("Devnet stopped")
-        except Exception as e:
-            logger.critical("Stop devnet failed:\n%s", e)
 
 class MockBacker:
     def __init__(self, dir_path=None):
@@ -111,7 +79,7 @@ class MockBacker:
     def start_backer(self):
         """Start the script in the background"""
 
-        if is_process_running("bin/backer"):
+        if is_process_running("bin/backer", BACKER_TEST_PORT):
             self.stop_backer()  # Stop the backer if it's already running
             time.sleep(1)
 
@@ -131,14 +99,10 @@ class MockBacker:
         except Exception as e:
             logger.critical("Stop backer failed:\n%s", e)
 
-class DevnetBase:
+class TestBase:
     @classmethod
     def setup_class(cls):
-        cls.yaci_devnet = YaciDevnet()
         cls.mock_backer = MockBacker()
-
-        cls.yaci_devnet.start_devnet()
-        time.sleep(1)
         cls.mock_backer.start_backer()
 
     @classmethod
@@ -148,6 +112,4 @@ class DevnetBase:
         # Remove test data
         if os.path.exists(BACKER_TEST_STORE_DIR):
             shutil.rmtree(BACKER_TEST_STORE_DIR)
-
-        cls.yaci_devnet.stop_devnet()
 

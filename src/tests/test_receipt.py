@@ -5,13 +5,13 @@ from keri.core import eventing, serdering, eventing
 from hio.help import Hict
 from keri.app.cli.common import existing
 from backer import cardaning
-from tests.helper import DevnetBase, BACKER_TEST_STORE_DIR, BACKER_TEST_PORT
+from tests.helper import TestBase, BACKER_TEST_STORE_DIR, BACKER_TEST_PORT
 
 
 RECEIPT_ENDPOINT = f"http://localhost:{BACKER_TEST_PORT}/receipts"
 
 
-class TestReceipt(DevnetBase):
+class TestReceipt(TestBase):
     def test_invalid_event_format(cls):
         body_data = b'{"v":"KERI10JSON000159_","t":"icp","d":"INVALID","i":"EEqgEGTZpJ0MZ_a97VwepTg4IWR9aGEfwXyV0DfJ8x6s","s":"0","kt":"1","k":["DMK1djRX6XJUr2jsCq9XcjoqwVtQyf4HhnyGf37_NiAs"],"nt":"1","n":["EJtfLdgPkiaNohGO6oRRaKEBq66HPV8KFOldSGJC4UYx"],"bt":"1","b":["BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha"],"c":[],"a":[]}'
         attachment= bytearray(
