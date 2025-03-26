@@ -50,6 +50,7 @@ class CardanoDBName(Enum):
     SCHEMA_QUEUED = "schemadb_queued"
     SCHEMA_PUBLISHED = "schemadb_published"
     SCHEMA_CONFIRMING = "schemadb_confirming"
+    FREE_UP_UTXOS = "free_up_utxos"
 
 class Cardano:
     """
@@ -76,6 +77,8 @@ class Cardano:
         self.schemadb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_QUEUED.value)
         self.schemadb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_PUBLISHED.value)
         self.schemadbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_CONFIRMING.value)
+
+        self.freeUpUtxos = subing.Suber(db=hab.db, subkey=CardanoDBName.FREE_UP_UTXOS.value)
 
         self.context = pycardano.OgmiosV6ChainContext()
         self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
@@ -137,11 +140,33 @@ class Cardano:
             serder = serdering.SerderKERI(raw=event)
             self.keldb_published.pin(keys=(serder.pre, serder.said), val=event)
 
+    def selectUTXO(self):
+        # TODO: We need more advanced UTXO selection in the future.
+        # For now, it just selects one and assumes it'll have enough.
+        # Deployments should fund the address with 1 or X UTXOs of sufficient size.
+
+        # Select old utxo from free up utxos first
+        for (key, ), _ in self.freeUpUtxos.getItemIter():
+            if utxo := self.context.utxo_by_tx_id(key, 0):
+                return utxo
+
+        # Select the first utxo from spending address
+        utxos = self.context.utxos(self.spending_addr)
+        if len(utxos) > 0:
+            return utxos[0]
+
+        return None
+
     def publishEvents(self, type:CardanoType):
         keri_data = bytearray()
         submitting_items = []
         submitting_tx_cbor = None
         temp_tx_cbor = None
+
+        utxo = self.selectUTXO()
+        if not utxo:
+            logger.critical("ERROR: No UTXO available")
+            return
 
         db_queued = self.getCardanoDB(type, CardanoDBType.QUEUED)
         dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
@@ -149,7 +174,7 @@ class Cardano:
         for _, event in reversed(list(db_queued.getItemIter())):
             # Build transaction
             builder = pycardano.TransactionBuilder(self.context)
-            builder.add_input_address(self.spending_addr)
+            builder.add_input(utxo)
             builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
             keri_data = keri_data + event.encode('utf-8')
             keri_data_bytes = bytes(keri_data)
@@ -203,6 +228,7 @@ class Cardano:
                 self.addToPublished(event, type)
                 self.removeFromQueue(event, type)
 
+            self.freeUpUtxos.rem(keys=(transId, ))
 
     def getConfirmingTrans(self, transId):
         tx = self.schemadbConfirming.get(transId)
@@ -240,6 +266,7 @@ class Cardano:
 
                 item = json.loads(item)
                 transTip = int(item["tip"])
+                utxoId = item["id"]
                 blockHeight = int(item["block_height"]) if 'block_height' in item.keys() else 0
 
                 # Check for confirmation
@@ -252,6 +279,7 @@ class Cardano:
                         self.addToQueue(keri_item.encode('utf-8'), type)
 
                     dbConfirming.rem(keys)
+                    self.freeUpUtxos.pin(keys=(utxoId, ), val=b'')
         except Exception as e:
             logger.critical(f"Cannot confirm transaction: {e}")
 

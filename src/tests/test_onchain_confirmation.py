@@ -84,6 +84,14 @@ def test_kel_confirmation():
         trans['block_height'] = blockHeight
         ledger.updateTrans(trans, type=cardaning.CardanoType.KEL)
         ledger.confirmTrans(type=cardaning.CardanoType.KEL)
+
+        # Check that utxo is stored
+        utxos = []
+        for (key, ), _ in ledger.freeUpUtxos.getItemIter():
+            utxos.append(key)
+
+        assert transId in utxos
+
         wait_for_updating_utxo()
         ledger.publishEvents(type=cardaning.CardanoType.KEL)
 
