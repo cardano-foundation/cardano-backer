@@ -93,6 +93,13 @@ def test_kel_confirmation():
         assert transId in utxos
 
         wait_for_updating_utxo()
+
+        # Check that the old utxo is re-selected
+        utxo = ledger.selectUTXO()
+        assert str(utxo.input.transaction_id) == transId
+
+        # Remove utxo of old test
+        ledger.freeUpUtxos.rem(keys=(transId, ))
         ledger.publishEvents(type=cardaning.CardanoType.KEL)
 
         confirmingTrans = ledger.getConfirmingTrans(transId)
@@ -213,6 +220,8 @@ def test_schema_confirmation():
         ledger.updateTrans(trans, type=cardaning.CardanoType.SCHEMA)
         ledger.confirmTrans(type=cardaning.CardanoType.SCHEMA)
         wait_for_updating_utxo()
+        # Remove utxo of old test
+        ledger.freeUpUtxos.rem(keys=(transId, ))
         ledger.publishEvents(type=cardaning.CardanoType.SCHEMA)
 
         confirmingTrans = ledger.getConfirmingTrans(transId)

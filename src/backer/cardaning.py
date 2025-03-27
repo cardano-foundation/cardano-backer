@@ -16,6 +16,7 @@ from keri import help
 from keri.db import subing
 from keri.core import serdering, scheming
 from backer.constants import METADATUM_LABEL_KEL, METADATUM_LABEL_SCHEMA
+from pycardano.transaction import UTxO
 
 logger = help.ogler.getLogger()
 
@@ -146,14 +147,15 @@ class Cardano:
         # Deployments should fund the address with 1 or X UTXOs of sufficient size.
 
         # Select old utxo from free up utxos first
-        for (key, ), _ in self.freeUpUtxos.getItemIter():
-            if utxo := self.context.utxo_by_tx_id(key, 0):
-                return utxo
+        for (key, ), utxo_cbor in self.freeUpUtxos.getItemIter():
+            utxo = UTxO.from_cbor(utxo_cbor)
+            return utxo
 
         # Select the first utxo from spending address
         utxos = self.context.utxos(self.spending_addr)
-        if len(utxos) > 0:
-            return utxos[0]
+        for utxo in utxos:
+            if not self.isInConfirmingUTxO(str(utxo.input.transaction_id)):
+                return utxo
 
         return None
 
@@ -213,7 +215,8 @@ class Cardano:
                 "id": transId,
                 "type": type.value,
                 "keri_raw": submitting_items,
-                "tip": self.tipHeight
+                "tip": self.tipHeight,
+                "utxo": utxo.to_cbor_hex()
             }
             logger.debug(f"Submitted tx: {submitted_trans}")
         except Exception as e:
@@ -257,6 +260,10 @@ class Cardano:
         except Exception as e:
             logger.critical(f"Cannot rollback transaction: {e}")
 
+    def isInConfirmingUTxO(self, txid):
+        dbConfirming = self.getCardanoDB(CardanoType.KEL, CardanoDBType.CONFIRMING)
+        return dbConfirming.get(keys=(txid, )) is not None
+
     def confirmTrans(self, type: CardanoType):
         dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
         try:
@@ -266,7 +273,8 @@ class Cardano:
 
                 item = json.loads(item)
                 transTip = int(item["tip"])
-                utxoId = item["id"]
+                txid = item["id"]
+                utxo = item["utxo"]
                 blockHeight = int(item["block_height"]) if 'block_height' in item.keys() else 0
 
                 # Check for confirmation
@@ -279,7 +287,7 @@ class Cardano:
                         self.addToQueue(keri_item.encode('utf-8'), type)
 
                     dbConfirming.rem(keys)
-                    self.freeUpUtxos.pin(keys=(utxoId, ), val=b'')
+                    self.freeUpUtxos.pin(keys=(txid, ), val=utxo)
         except Exception as e:
             logger.critical(f"Cannot confirm transaction: {e}")
 
