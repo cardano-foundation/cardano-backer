@@ -57,6 +57,9 @@ def test_kel_confirmation():
 
         # Submit event
         ledger.updateTip(tipHeight - 1)
+
+        selected_utxo = ledger.selectUTXO()
+
         ledger.publishEvents(type=cardaning.CardanoType.KEL)
         trans = None
 
@@ -69,6 +72,19 @@ def test_kel_confirmation():
         assert trans['keri_raw'] == [msg.decode('utf-8')]
 
         transId = trans['id']
+
+        # Check that utxo is stored
+        for (key, ), utxo_list in ledger.dbConfirmingUtxos.getItemIter():
+            assert key == transId
+            cbor_utxo = selected_utxo[0].to_cbor_hex()
+            assert json.loads(utxo_list) == [cbor_utxo]
+
+            # Check that Confirming utxo should not be slected
+            new_utxos = ledger.selectUTXO()
+            assert new_utxos[0].to_cbor_hex() != cbor_utxo
+
+            break
+
         ledger.updateTip(tipHeight)
         trans['block_height'] = blockHeight
         ledger.updateTrans(trans, type=cardaning.CardanoType.KEL)
@@ -84,22 +100,10 @@ def test_kel_confirmation():
         trans['block_height'] = blockHeight
         ledger.updateTrans(trans, type=cardaning.CardanoType.KEL)
         ledger.confirmTrans(type=cardaning.CardanoType.KEL)
-
-        # Check that utxo is stored
-        utxos = []
-        for (key, ), _ in ledger.freeUpUtxos.getItemIter():
-            utxos.append(key)
-
-        assert transId in utxos
-
         wait_for_updating_utxo()
 
-        # Check that the old utxo is re-selected
-        utxo = ledger.selectUTXO()
-        assert str(utxo.input.transaction_id) == transId
-
         # Remove utxo of old test
-        ledger.freeUpUtxos.rem(keys=(transId, ))
+        ledger.dbConfirmingUtxos.rem(keys=(transId, ))
         ledger.publishEvents(type=cardaning.CardanoType.KEL)
 
         confirmingTrans = ledger.getConfirmingTrans(transId)
@@ -221,7 +225,7 @@ def test_schema_confirmation():
         ledger.confirmTrans(type=cardaning.CardanoType.SCHEMA)
         wait_for_updating_utxo()
         # Remove utxo of old test
-        ledger.freeUpUtxos.rem(keys=(transId, ))
+        ledger.dbConfirmingUtxos.rem(keys=(transId, ))
         ledger.publishEvents(type=cardaning.CardanoType.SCHEMA)
 
         confirmingTrans = ledger.getConfirmingTrans(transId)

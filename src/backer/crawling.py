@@ -58,7 +58,7 @@ class Crawler(doing.DoDoer):
                             logger.debug(f"{direction}:\nblock: {block}\ntip:{tip}\n")
 
                             for tx in block.transactions:
-                                txId = tx['inputs'][0]['transaction']['id']
+                                txId = tx['id']
                                 confirmingTrans = self.ledger.getConfirmingTrans(txId)
                                 if confirmingTrans is not None:
                                     trans = json.loads(confirmingTrans)
