@@ -7,31 +7,57 @@ Registrar Backer operations on Cardano Ledger
 
 """
 
-from blockfrost import BlockFrostApi, ApiError, ApiUrls
-from pycardano import * 
-from threading import Timer
-from  pprint import pp
-import os
-import time
+from enum import Enum
 import json
+import pycardano
+import os
+import ogmios
+from keri import help
+from keri.db import subing
+from keri.core import serdering, scheming
+from backer.constants import METADATUM_LABEL_KEL, METADATUM_LABEL_SCHEMA
+
+logger = help.ogler.getLogger()
 
 QUEUE_DURATION = os.environ.get('QUEUE_DURATION', 60)
 NETWORK_NAME = os.environ.get('NETWORK') if os.environ.get('NETWORK') else 'preview'
-NETWORK = Network.MAINNET if os.environ.get('NETWORK') == 'mainnet' else Network.TESTNET
+NETWORK = pycardano.Network.MAINNET if os.environ.get('NETWORK') == 'mainnet' else pycardano.Network.TESTNET
 MINIMUN_BALANCE = os.environ.get('MINIMUN_BALANCE', 5000000)
-FUNDING_AMOUNT = os.environ.get('FUNDING_AMOUNT', 30000000)
 TRANSACTION_AMOUNT = os.environ.get('TRANSACTION_AMOUNT', 1000000)
-BLOCKFROST_API_URL = os.environ.get('BLOCKFROST_API_URL') if os.environ.get('BLOCKFROST_API_URL') else ApiUrls[NETWORK_NAME].value
 MIN_BLOCK_CONFIRMATIONS = os.environ.get('MIN_BLOCK_CONFIRMATIONS', 3)
+TRANSACTION_SECURITY_DEPTH = os.environ.get('TRANSACTION_SECURITY_DEPTH', 16)
+TRANSACTION_TIMEOUT_DEPTH = os.environ.get('TRANSACTION_TIMEOUT_DEPTH', 32)
+MAX_TRANSACTION_SIZE = 16384
+MAX_TRANSACTION_SIZE_MARGIN = 3 # PyCardano and Ogmios serialize the transaction could result in small variations
+OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
+OGMIOS_PORT = os.environ.get('OGMIOS_PORT', 1337)
+
+
+class CardanoType(Enum):
+    SCHEMA = "CARDANO_SCHEMA"
+    KEL = "CARDANO_KEL"
+
+
+class CardanoDBType(Enum):
+    QUEUED = "QUEUED"
+    PUBLISHED = "PUBLISHED"
+    CONFIRMING = "CONFIRMING"
+
+class CardanoDBName(Enum):
+    KEL_QUEUED = "kel_queued"
+    KEL_PUBLISHED = "kel_published"
+    KEL_CONFIRMING = "kel_confirming"
+    SCHEMA_QUEUED = "schemadb_queued"
+    SCHEMA_PUBLISHED = "schemadb_published"
+    SCHEMA_CONFIRMING = "schemadb_confirming"
 
 class Cardano:
     """
     Environment variables required:
-        - BLOCKFROST_API_KEY = API KEY from Blockfrots  https://blockfrost.io
-        - FUNDING_ADDRESS_CBORHEX = Optional, for testing purposes. Private Key of funding address as CBOR Hex. Must be an Enterprice address (no Staking part) as PaymentSigningKeyShelley_ed25519
-    
+        - WALLET_ADDRESS_CBORHEX = Private Key of funding address as CBOR Hex. Must be an Enterprice address (no Staking part) as PaymentSigningKeyShelley_ed25519
+
     Additional libraries required:
-        pip install pycardano blockfrost-python 
+        pip install pycardano ogmios
     See Backer designation event: https://github.com/WebOfTrust/keripy/issues/90
 
     Features:
@@ -41,201 +67,282 @@ class Cardano:
         - Optional funding address to fund the backer address
     """
 
-    def __init__(self, name='backer', hab=None, ks=None):
-        self.name = name
-        self.pendingKEL = {}
-        self.timer = Timer(QUEUE_DURATION, self.flushQueue)
-        # BLOCKFROST_API_KEY can be empty for blockfrost-ryo instances
-        blockfrostProjectId=os.environ.get('BLOCKFROST_API_KEY', '')
-        self.api = BlockFrostApi(
-            project_id=blockfrostProjectId,
-            base_url=BLOCKFROST_API_URL
-            )
-        self.context = BlockFrostChainContext(blockfrostProjectId, NETWORK, BLOCKFROST_API_URL)
+    def __init__(self, hab, ks=None):
+        self.pending_kel = []
+        self.keldb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_QUEUED.value)
+        self.keldb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_PUBLISHED.value)
+        self.keldbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_CONFIRMING.value)
 
-        # retrieve backer private key and derive cardano address
-        backerPrivateKey = ks.pris.get(hab.kever.prefixer.qb64).raw
-        self.payment_signing_key = PaymentSigningKey(backerPrivateKey,"PaymentSigningKeyShelley_ed25519","PaymentSigningKeyShelley_ed25519")
-        payment_verification_key = PaymentVerificationKey.from_signing_key(self.payment_signing_key)
-        self.spending_addr = Address(payment_part=payment_verification_key.hash(),staking_part=None, network=NETWORK)
-        print("Cardano Backer Address:", self.spending_addr.encode())
-        
-        # check address balance and try to fund if necesary
-        balance = self.getaddressBalance()
+        self.schemadb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_QUEUED.value)
+        self.schemadb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_PUBLISHED.value)
+        self.schemadbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_CONFIRMING.value)
+
+        self.context = pycardano.OgmiosV6ChainContext()
+        self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
+        self.tipHeight = 0
+
+        self.payment_signing_key = pycardano.PaymentSigningKey.from_cbor(os.environ.get('WALLET_ADDRESS_CBORHEX'))
+        payment_verification_key = pycardano.PaymentVerificationKey.from_signing_key(self.payment_signing_key)
+        self.spending_addr = pycardano.Address(payment_verification_key.hash(), None, network=NETWORK)
+        print("Cardano Backer Spending Address:", self.spending_addr.encode())
+
+        balance = self.getaddressBalance(self.spending_addr.encode())
         if balance and balance > MINIMUN_BALANCE:
-            print("Address balance:",balance/1000000, "ADA")
+            print("Address balance:", balance/1000000, "ADA")
         else:
-            self.fundAddress(self.spending_addr)
+            print("The wallet is empty or insufficient balance detected")
+            exit(1)
 
-    def publishEvent(self, event):
-        print("Adding event to queue", event['ked']['s'],event['ked']['t'])
-        seq_no = int(event['ked']['s'],16)
-        prefix = event['ked']['i']
-        if not prefix in self.pendingKEL: self.pendingKEL[prefix] = {}
-        string_event = json.dumps(event, separators=(',', ':'),ensure_ascii=False)
-        self.pendingKEL[prefix][seq_no] = [string_event[i:i+64] for i in range(0, len(string_event), 64)]
-        if not self.timer.is_alive():
-            self.timer = Timer(90, self.flushQueue)
-            self.timer.start()
-
-    def flushQueue(self):
-        print("Flushing Queue")
-        try:
-            txs = self.api.address_transactions(self.spending_addr)
-            utxos = self.api.address_utxos(self.spending_addr.encode())
-            kels_to_remove = []
-            for key, value in self.pendingKEL.items():
-                # Check last KE in blockchain to avoid duplicates (for some reason (TBD) mailbox may submit an event twice)                
-                for t in txs:
-                    meta = self.api.transaction_metadata(t.tx_hash, return_type='json')
-                    for m in meta:
-                        ke = json.loads(''.join(m['json_metadata']))
-                        seq = int(m['label'])
-                        if ke['ked']['i'] == key and seq in self.pendingKEL[key]: del self.pendingKEL[key][seq]
-                # Build transaction
-                builder = TransactionBuilder(self.context)
-                # select utxos
-                utxo_sum = 0
-                utxo_to_remove = []
-                for u in utxos:
-                    utxo_sum = utxo_sum + int(u.amount[0].quantity)
-                    builder.add_input(
-                        UTxO(
-                            TransactionInput.from_primitive([u.tx_hash, u.tx_index]),
-                            TransactionOutput(address=Address.from_primitive(u.address), amount=int(u.amount[0].quantity))
-                        )
-                    )
-                    utxo_to_remove.append(u)
-                    if utxo_sum > (TRANSACTION_AMOUNT + 2000000): break
-                for ur in utxo_to_remove: utxos.remove(ur)
-                builder.add_output(TransactionOutput(self.spending_addr,Value.from_primitive([TRANSACTION_AMOUNT])))
-                builder.auxiliary_data = AuxiliaryData(Metadata(value))
-                signed_tx = builder.build_and_sign([self.payment_signing_key], change_address=self.spending_addr)
-                # Submit transaction
-                self.context.submit_tx(signed_tx.to_cbor())
-                kels_to_remove.append(key)
-            self.pendingKEL = {}
-        except Exception as e:
-            for k in kels_to_remove: del self.pendingKEL[k]
-            self.timer = Timer(90, self.flushQueue)
-            self.timer.start()
-
-    def getaddressBalance(self):
-        try:
-            address = self.api.address(address=self.spending_addr.encode())
-            return int(address.amount[0].quantity)
-        except ApiError as e:
-            return 0
-
-    def fundAddress(self, addr):
-        try:
-            funding_payment_signing_key = PaymentSigningKey.from_cbor(os.environ.get('FUNDING_ADDRESS_CBORHEX'))
-            funding_payment_verification_key = PaymentVerificationKey.from_signing_key(funding_payment_signing_key)
-            funding_addr = Address(funding_payment_verification_key.hash(), None, network=NETWORK)
-        except KeyError:
-            print("Backer address could not be funded. Environment variable FUNDING_ADDRESS_CBORHEX is not set")
-            return
-        try:
-            fund_addr = funding_addr.encode()
-            resp = self.api.address(address=fund_addr)
-            funding_balance = resp.amount[0]
-        except ApiError as e:
-            if e.status_code == 404:
-                print("Empty balance to fund backer")
+    def getCardanoDB(self, type, name):
+            if type == CardanoType.SCHEMA:
+                if name == CardanoDBType.QUEUED:
+                    return self.schemadb_queued
+                elif name == CardanoDBType.PUBLISHED:
+                    return self.schemadb_published
+                elif name == CardanoDBType.CONFIRMING:
+                    return self.schemadbConfirming
             else:
-                print("Blockfrost API error:",e.message)
-            return
-            
-        print("Funding address:", funding_addr)
-        print("Funding balance:", int(funding_balance.quantity)/1000000,"ADA")
-        if int(funding_balance.quantity) > (FUNDING_AMOUNT + 1000000):
-            try:
-                builder = TransactionBuilder(self.context)
-                builder.add_input_address(funding_addr)
-                builder.add_output(TransactionOutput(addr,Value.from_primitive([int(FUNDING_AMOUNT/3)])))
-                # builder.add_output(TransactionOutput(addr,Value.from_primitive([int(FUNDING_AMOUNT/3)])))
-                # builder.add_output(TransactionOutput(addr,Value.from_primitive([int(FUNDING_AMOUNT/3)])))
-                signed_tx = builder.build_and_sign([funding_payment_signing_key], change_address=funding_addr)
-                self.context.submit_tx(signed_tx.to_cbor())
-                print("Funds submitted. Wait...")
-                time.sleep(50)
-                balance = self.getaddressBalance()
-                if balance:
-                    print("Backer balance:",balance/1000000, "ADA")
-            except Exception as e:
-                print("error", e)
-        else:
-            print("Insuficient balance to fund backer")
+                if name == CardanoDBType.QUEUED:
+                    return self.keldb_queued
+                elif name == CardanoDBType.PUBLISHED:
+                    return self.keldb_published
+                elif name == CardanoDBType.CONFIRMING:
+                    return self.keldbConfirming
 
+    def updateTip(self, tipHeight):
+        self.tipHeight = tipHeight
+
+    def addToQueue(self, event, type:CardanoType):
+        if type == CardanoType.SCHEMA:
+            schemer = scheming.Schemer(raw=event)
+            self.schemadb_queued.pin(keys=(schemer.said, ), val=event)
+        else:
+            serder = serdering.SerderKERI(raw=event)
+            self.keldb_queued.pin(keys=(serder.pre, serder.said), val=event)
+
+    def removeFromQueue(self, event, type:CardanoType):
+        if type == CardanoType.SCHEMA:
+            schemer = scheming.Schemer(raw=event)
+            self.schemadb_queued.rem(keys=(schemer.said, ))
+        else:
+            serder = serdering.SerderKERI(raw=event)
+            keys=(serder.pre, serder.said)
+            self.keldb_queued.rem(keys=keys)
+
+    def addToPublished(self, event, type:CardanoType):
+        if type == CardanoType.SCHEMA:
+            schemer = scheming.Schemer(raw=event)
+            self.schemadb_published.pin(keys=(schemer.said, ), val=event)
+        else:
+            serder = serdering.SerderKERI(raw=event)
+            self.keldb_published.pin(keys=(serder.pre, serder.said), val=event)
+
+    def publishEvents(self, type:CardanoType):
+        keri_data = bytearray()
+        submitting_items = []
+        submitting_tx_cbor = None
+        temp_tx_cbor = None
+
+        db_queued = self.getCardanoDB(type, CardanoDBType.QUEUED)
+        dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
+
+        for _, event in reversed(list(db_queued.getItemIter())):
+            # Build transaction
+            builder = pycardano.TransactionBuilder(self.context)
+            builder.add_input_address(self.spending_addr)
+            builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
+            keri_data = keri_data + event.encode('utf-8')
+            keri_data_bytes = bytes(keri_data)
+
+            # Chunk size
+            # bytearrays is not accept
+            value = [keri_data_bytes[i:i + 64] for i in range(0, len(keri_data_bytes), 64)]
+
+            # Metadata. accept int key type
+            metadatumLabel = METADATUM_LABEL_KEL if type == CardanoType.KEL else METADATUM_LABEL_SCHEMA
+            builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({metadatumLabel: value}))
+            try:
+                signed_tx = builder.build_and_sign([self.payment_signing_key],
+                                                change_address=self.spending_addr,
+                                                merge_change=True)
+
+                if len(signed_tx.to_cbor()) > MAX_TRANSACTION_SIZE - MAX_TRANSACTION_SIZE_MARGIN:
+                    break
+
+                temp_tx_cbor = signed_tx.to_cbor()
+            except pycardano.exception.InvalidTransactionException as e:
+                if "exceeds the max limit" in str(e):
+                    break
+
+            submitting_tx_cbor = bytes(temp_tx_cbor)
+            submitting_items.append(event)
+
+        if not submitting_tx_cbor:
+            return
+        # Submit transaction
+        submitted_trans = None
+        try:
+            self.context.submit_tx_cbor(submitting_tx_cbor)
+            transId = str(signed_tx.transaction_body.inputs[0].transaction_id)
+            submitted_trans = {
+                "id": transId,
+                "type": type.value,
+                "keri_raw": submitting_items,
+                "tip": self.tipHeight
+            }
+            logger.debug(f"Submitted tx: {submitted_trans}")
+        except Exception as e:
+            logger.critical(f"ERROR: Submit tx: {e}")
+
+        # Remove submitted events from queue and add them into published
+        if submitted_trans:
+            dbConfirming.pin(keys=submitted_trans["id"], val=json.dumps(submitted_trans).encode('utf-8'))
+
+            for event in submitting_items:
+                event = event.encode('utf-8')
+                self.addToPublished(event, type)
+                self.removeFromQueue(event, type)
+
+
+    def getConfirmingTrans(self, transId):
+        tx = self.schemadbConfirming.get(transId)
+
+        if not tx:
+            tx = self.keldbConfirming.get(transId)
+
+        return tx
+
+    def rollbackBlock(self, rollBackSlot, type:CardanoType):
+        try:
+            dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
+            for keys, item in dbConfirming.getItemIter():
+                if item is None:
+                    continue
+
+                item = json.loads(item)
+                blockSlot = item["block_slot"]
+
+                if blockSlot > rollBackSlot:
+                    # Push back to pending KEL to resubmit
+                    for keri_item in item['keri_raw']:
+                        self.addToQueue(keri_item.encode('utf-8'), type=type)
+
+                    dbConfirming.rem(keys)
+        except Exception as e:
+            logger.critical(f"Cannot rollback transaction: {e}")
+
+    def confirmTrans(self, type: CardanoType):
+        dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
+        try:
+            for keys, item in dbConfirming.getItemIter():
+                if item is None:
+                    continue
+
+                item = json.loads(item)
+                transTip = int(item["tip"])
+                blockHeight = int(item["block_height"]) if 'block_height' in item.keys() else 0
+
+                # Check for confirmation
+                if self.tipHeight > 0 and blockHeight > 0 and self.tipHeight - blockHeight >= TRANSACTION_SECURITY_DEPTH:
+                    dbConfirming.rem(keys)
+                    continue
+
+                if self.tipHeight - transTip > TRANSACTION_TIMEOUT_DEPTH:
+                    for keri_item in item['keri_raw']:
+                        self.addToQueue(keri_item.encode('utf-8'), type)
+
+                    dbConfirming.rem(keys)
+        except Exception as e:
+            logger.critical(f"Cannot confirm transaction: {e}")
+
+    def updateTrans(self, trans, type:CardanoType):
+        transId = trans['id']
+        dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
+        dbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
+
+    def getaddressBalance(self, addr):
+        try:
+            utxo_list = self.client.query_utxo.execute([ogmios.Address(addr)])
+
+            if utxo_list and len(utxo_list[0]) > 0:
+                utxo = utxo_list[0][0]
+                return int(utxo.value['ada']['lovelace'])
+        except Exception as e:
+            logger.critical(f"Cannot get address's balance: {e}")
+
+        return 0
 
 def getInfo(alias, hab, ks):
-    try:
-        blockfrostProjectId=os.environ['BLOCKFROST_API_KEY']
-    except KeyError:
-        print("Environment variable BLOCKFROST_API_KEY not set")
-        exit(1)
-    api = BlockFrostApi(
-        project_id=blockfrostProjectId,
-        base_url=BLOCKFROST_API_URL
-        )
-    backerPrivateKey = ks.pris.get(hab.kever.prefixer.qb64).raw
-    payment_signing_key = PaymentSigningKey(backerPrivateKey,"PaymentSigningKeyShelley_ed25519","PaymentSigningKeyShelley_ed25519")
-    payment_verification_key = PaymentVerificationKey.from_signing_key(payment_signing_key)
-    spending_addr = Address(payment_part=payment_verification_key.hash(),staking_part=None, network=NETWORK)
-    try:
-        address = api.address(address=spending_addr.encode())
-        balance = int(address.amount[0].quantity)
-    except ApiError as e:
-        print("error", e)
+    # # TODO: Implement this later
+    # try:
+    #     blockfrostProjectId=os.environ['BLOCKFROST_API_KEY']
+    # except KeyError:
+    #     print("Environment variable BLOCKFROST_API_KEY not set")
+    #     exit(1)
+    # api = BlockFrostApi(
+    #     project_id=blockfrostProjectId,
+    #     base_url=BLOCKFROST_API_URL
+    #     )
+    # backerPrivateKey = ks.pris.get(hab.kever.prefixer.qb64).raw
+    # payment_signing_key = PaymentSigningKey(backerPrivateKey,"PaymentSigningKeyShelley_ed25519","PaymentSigningKeyShelley_ed25519")
+    # payment_verification_key = PaymentVerificationKey.from_signing_key(payment_signing_key)
+    # spending_addr = Address(payment_part=payment_verification_key.hash(),staking_part=None, network=NETWORK)
+    # try:
+    #     address = api.address(address=spending_addr.encode())
+    #     balance = int(address.amount[0].quantity)
+    # except ApiError as e:
+    #     print("error", e)
 
 
-    try:
-        funding_payment_signing_key = PaymentSigningKey.from_cbor(os.environ.get('FUNDING_ADDRESS_CBORHEX'))
-        funding_payment_verification_key = PaymentVerificationKey.from_signing_key(funding_payment_signing_key)
-        funding_addr = Address(funding_payment_verification_key.hash(), None, network=NETWORK).encode()
-        f_address = api.address(address=funding_addr)
-        funding_balace = int(f_address.amount[0].quantity)
-    except:
-        funding_addr = "NA"
-        funding_balace = "NA"
+    # try:
+    #     funding_payment_signing_key = PaymentSigningKey.from_cbor(os.environ.get('WALLET_ADDRESS_CBORHEX'))
+    #     funding_payment_verification_key = PaymentVerificationKey.from_signing_key(funding_payment_signing_key)
+    #     funding_addr = Address(funding_payment_verification_key.hash(), None, network=NETWORK).encode()
+    #     f_address = api.address(address=funding_addr)
+    #     funding_balace = int(f_address.amount[0].quantity)
+    # except:
+    #     funding_addr = "NA"
+    #     funding_balace = "NA"
 
-    print("Name:", alias)
-    print("Prefix:", hab.kever.prefixer.qb64)
-    print("Network:", "Cardano", NETWORK.name)
-    print("Cardano address:", spending_addr.encode())
-    print("Balance:", balance/1000000, "ADA")
-    print("Funding address:", funding_addr)
-    print("Funding balance:", funding_balace/1000000, "ADA")
+    # print("Name:", alias)
+    # print("Prefix:", hab.kever.prefixer.qb64)
+    # print("Network:", "Cardano", NETWORK.name)
+    # print("Cardano address:", spending_addr.encode())
+    # print("Balance:", balance/1000000, "ADA")
+    # print("Funding address:", funding_addr)
+    # print("Funding balance:", funding_balace/1000000, "ADA")
+    return
 
 def queryBlockchain(prefix, hab,ks):
-    try:
-        blockfrostProjectId=os.environ['BLOCKFROST_API_KEY']
-    except KeyError:
-        print("Environment variable BLOCKFROST_API_KEY not set")
-        exit(1)
-    api = BlockFrostApi(
-        project_id=blockfrostProjectId,
-        base_url=BLOCKFROST_API_URL
-        )
-    backerPrivateKey = ks.pris.get(hab.kever.prefixer.qb64).raw
-    payment_signing_key = PaymentSigningKey(backerPrivateKey,"PaymentSigningKeyShelley_ed25519","PaymentSigningKeyShelley_ed25519")
-    payment_verification_key = PaymentVerificationKey.from_signing_key(payment_signing_key)
-    spending_addr = Address(payment_part=payment_verification_key.hash(),staking_part=None, network=NETWORK)
+    # #TODO: Implement this later
+    # try:
+    #     blockfrostProjectId=os.environ['BLOCKFROST_API_KEY']
+    # except KeyError:
+    #     print("Environment variable BLOCKFROST_API_KEY not set")
+    #     exit(1)
+    # api = BlockFrostApi(
+    #     project_id=blockfrostProjectId,
+    #     base_url=BLOCKFROST_API_URL
+    #     )
+    # backerPrivateKey = ks.pris.get(hab.kever.prefixer.qb64).raw
+    # payment_signing_key = PaymentSigningKey(backerPrivateKey,"PaymentSigningKeyShelley_ed25519","PaymentSigningKeyShelley_ed25519")
+    # payment_verification_key = PaymentVerificationKey.from_signing_key(payment_signing_key)
+    # spending_addr = Address(payment_part=payment_verification_key.hash(),staking_part=None, network=NETWORK)
 
-    txs = api.address_transactions(spending_addr.encode())
-    for tx in txs:
-        block_height = tx["block_height"]
-        latest_block = api.block_latest()
-        if latest_block.height - block_height < MIN_BLOCK_CONFIRMATIONS: continue
-        tx_detail = api.transaction(tx.tx_hash)
-        meta = api.transaction_metadata(tx.tx_hash, return_type='json')
-        if meta:
-            # print("Fees: ",str(int(tx_detail.fees)/1000000), "ADA")
-            for n in meta:
-                ke = json.loads(''.join(n['json_metadata']))
-                if prefix == ke['ked']['i']:
-                    print("SeqNo: ",n['label'])
-                    pp(ke)
-                    print("\n")
+    # txs = api.address_transactions(spending_addr.encode())
+    # for tx in txs:
+    #     block_height = tx["block_height"]
+    #     latest_block = api.block_latest()
+    #     if latest_block.height - block_height < MIN_BLOCK_CONFIRMATIONS: continue
+    #     tx_detail = api.transaction(tx.tx_hash)
+    #     meta = api.transaction_metadata(tx.tx_hash, return_type='json')
+    #     if meta:
+    #         # print("Fees: ",str(int(tx_detail.fees)/1000000), "ADA")
+    #         for n in meta:
+    #             ke = json.loads(''.join(n['json_metadata']))
+    #             if prefix == ke['ked']['i']:
+    #                 print("SeqNo: ",n['label'])
+    #                 pp(ke)
+    #                 print("\n")
 
     return

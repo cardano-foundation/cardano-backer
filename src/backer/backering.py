@@ -8,29 +8,28 @@ class to support registrar backers
 
 import falcon
 import time
+import keri.app.oobiing
 
 from hio.base import doing
 from hio.core import http
 from hio.core.tcp import serving
 from hio.help import decking
-
-import keri.app.oobiing
 from keri.app import directing, storing, httping, forwarding, oobiing
-from keri import help
-from keri.core import eventing, parsing, routing
+from keri import help, kering
+from keri.core import serdering, eventing, parsing, routing, Counter, Codens, scheming
 from keri.core.coring import Ilks
 from keri.db import basing, dbing
-
 from keri.end import ending
 from keri.peer import exchanging
 from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
-from keri.core import coring
+
+from backer.cardaning import CardanoType
 
 logger = help.ogler.getLogger()
 
 
-def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledger=None):
+def setupBacker(hby, queue, alias="backer", mbx=None, tcpPort=5631, httpPort=5632):
     """
     Setup Registrar Backer controller and doers
 
@@ -48,7 +47,7 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledg
 
     mbx = mbx if mbx is not None else storing.Mailboxer(name=alias, temp=hby.temp)
     forwarder = forwarding.ForwardHandler(hby=hby, mbx=mbx)
-    exchanger = exchanging.Exchanger(db=hby.db, handlers=[forwarder])
+    exchanger = exchanging.Exchanger(hby=hby, handlers=[forwarder])
     clienter = httping.Clienter()
     oobiery = keri.app.oobiing.Oobiery(hby=hby, clienter=clienter)
 
@@ -77,10 +76,14 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledg
                             exc=exchanger,
                             rvy=rvy)
 
-    httpEnd = HttpEnd(rxbs=parser.ims, mbx=mbx, hab=hab, ledger=ledger)
-    app.add_route("/", httpEnd)    
-    receiptEnd = ReceiptEnd(hab=hab, inbound=cues, ledger=ledger)
+    httpEnd = HttpEnd(rxbs=parser.ims, mbx=mbx, hab=hab, queue=queue)
+    app.add_route("/", httpEnd)
+
+    receiptEnd = ReceiptEnd(hab=hab, queue=queue, inbound=cues)
     app.add_route("/receipts", receiptEnd)
+
+    schemaEnd = SchemaEnd(hab=hab, queue=queue)
+    app.add_route("/schemas", schemaEnd)
 
     server = http.Server(port=httpPort, app=app)
     httpServerDoer = http.ServerDoer(server=server)
@@ -93,12 +96,20 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632, ledg
 
     directant = directing.Directant(hab=hab, server=server, verifier=verfer)
 
-    witStart = BackerStart(hab=hab, parser=parser, cues=cues,
-                            kvy=kvy, tvy=tvy, rvy=rvy, exc=exchanger, replies=rep.reps,
-                            responses=rep.cues, queries=httpEnd.qrycues)
+    witStart = BackerStart(
+        hab=hab,
+        parser=parser,
+        cues=cues,
+        kvy=kvy,
+        tvy=tvy,
+        rvy=rvy,
+        exc=exchanger,
+        replies=rep.reps,
+        responses=rep.cues,
+        queries=httpEnd.qrycues)
 
     doers.extend(oobiRes)
-    doers.extend([regDoer, exchanger, directant, serverDoer, httpServerDoer, rep, witStart, *oobiery.doers])
+    doers.extend([regDoer, directant, serverDoer, httpServerDoer, rep, witStart, receiptEnd, queue, *oobiery.doers])
 
     return doers
 
@@ -120,7 +131,7 @@ class BackerStart(doing.DoDoer):
         self.cues = cues if cues is not None else decking.Deck()
 
         doers = [doing.doify(self.start), doing.doify(self.msgDo),
-                 doing.doify(self.exchangerDo), doing.doify(self.escrowDo), doing.doify(self.cueDo)]
+                 doing.doify(self.escrowDo), doing.doify(self.cueDo)]
         super().__init__(doers=doers, **opts)
 
     def start(self, tymth=None, tock=0.0):
@@ -222,28 +233,6 @@ class BackerStart(doing.DoDoer):
                 yield self.tock
             yield self.tock
 
-    def exchangerDo(self, tymth=None, tock=0.0):
-        """
-        Returns doifiable Doist compatibile generator method (doer dog) to process
-            .exc responses and pass them on to the HTTPRespondant
-
-        Parameters:
-            tymth (function): injected function wrapper closure returned by .tymen() of
-                Tymist instance. Calling tymth() returns associated Tymist .tyme.
-            tock (float): injected initial tock value
-
-        Usage:
-            add result of doify on this method to doers list
-        """
-        self.wind(tymth)
-        self.tock = tock
-        _ = (yield self.tock)
-
-        while True:
-            for rep in self.exc.processResponseIter():
-                self.replies.append(rep)
-                yield  # throttle just do one cue at a time
-            yield
 
 class HttpEnd:
     """
@@ -257,7 +246,7 @@ class HttpEnd:
     TimeoutQNF = 30
     TimeoutMBX = 5
 
-    def __init__(self, rxbs=None, mbx=None, qrycues=None, hab=None, ledger=None):
+    def __init__(self, queue, rxbs=None, mbx=None, qrycues=None, hab=None):
         """
         Create the KEL HTTP server from the Habitat with an optional Falcon App to
         register the routes with.
@@ -273,7 +262,7 @@ class HttpEnd:
         self.mbx = mbx
         self.qrycues = qrycues if qrycues is not None else decking.Deck()
         self.hab = hab
-        self.ledger = ledger
+        self.queue = queue
 
     def on_post(self, req, rep):
         """
@@ -309,13 +298,12 @@ class HttpEnd:
         rep.set_header('connection', "close")
 
         cr = httping.parseCesrHttpRequest(req=req)
-        serder = eventing.Serder(ked=cr.payload, kind=eventing.Serials.json)
+        serder = serdering.SerderKERI(sad=cr.payload, kind=eventing.Kinds.json)
+        ilk = serder.ked["t"]
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
-
         self.rxbs.extend(msg)
 
-        ilk = serder.ked["t"]
         if ilk in (Ilks.icp, Ilks.rot, Ilks.ixn, Ilks.dip, Ilks.drt, Ilks.exn, Ilks.rpy):
             rep.set_header('Content-Type', "application/json")
             rep.status = falcon.HTTP_204
@@ -326,90 +314,14 @@ class HttpEnd:
             if serder.ked["r"] in ("mbx",):
                 rep.set_header('Content-Type', "text/event-stream")
                 rep.status = falcon.HTTP_200
-                rep.stream = QryRpyMailboxIterable(mbx=self.mbx, cues=self.qrycues, said=serder.said, hab=self.hab,ledger=self.ledger)
+                rep.stream = QryRpyMailboxIterable(mbx=self.mbx, cues=self.qrycues, said=serder.said, hab=self.hab, queue=self.queue)
             else:
                 rep.set_header('Content-Type', "application/json")
                 rep.status = falcon.HTTP_204
         print("Post msg received of type", ilk)
 
-class QryRpyMailboxIterable:
-
-    def __init__(self, cues, mbx, said, retry=5000, hab=None, ledger=None):
-        self.mbx = mbx
-        self.retry = retry
-        self.cues = cues
-        self.said = said
-        self.iter = None
-        self.hab = hab
-        self.ledger = ledger
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        if self.iter is None:
-            if self.cues:
-                cue = self.cues.popleft()
-                serder = cue["serder"]
-                if serder.said == self.said:
-                    kin = cue["kin"]
-                    if kin == "stream":
-                        self.iter = iter(MailboxIterable(mbx=self.mbx, pre=cue["pre"], topics=cue["topics"],
-                                                         retry=self.retry, hab=self.hab, ledger=self.ledger))
-                else:
-                    self.cues.append(cue)
-            return b''
-
-        return next(self.iter)
-
-class MailboxIterable:
-    TimeoutMBX = 30000000
-
-    def __init__(self, mbx, pre, topics, retry=5000, hab=None, ledger=None):
-        self.mbx = mbx
-        self.pre = pre
-        self.topics = topics
-        self.retry = retry
-        self.hab = hab
-        self.ledger = ledger
-
-    def __iter__(self):
-        self.start = self.end = time.perf_counter()
-        return self
-
-    def __next__(self):
-        if self.end - self.start < self.TimeoutMBX:
-            if self.start == self.end:
-                self.end = time.perf_counter()
-                return bytearray(f"retry: {self.retry}\n\n".encode("utf-8"))
-
-            data = bytearray()
-            for topic, idx in self.topics.items():
-                key = self.pre + topic
-                for fn, _, msg in self.mbx.cloneTopicIter(key, idx):
-                    data.extend(bytearray("id: {}\nevent: {}\nretry: {}\ndata: ".format(fn, topic, self.retry)
-                                          .encode("utf-8")))
-                    data.extend(msg)
-                    data.extend(b'\n\n')
-                    idx = idx + 1
-                    self.start = time.perf_counter()
-
-                    if self.ledger and topic == "/receipt":
-                        try:
-                            serder = coring.Serder(raw=msg)
-                            event = eventing.loadEvent(self.hab.db, self.pre, serder.saidb)
-                            self.ledger.publishEvent(event)
-                            
-                        except Exception as e:
-                            logger.error(f"ledger error: {e}")
-                self.topics[topic] = idx
-            self.end = time.perf_counter()
-            return data
-
-        raise StopIteration
-
 class ReceiptEnd(doing.DoDoer):
-    """ Endpoint class for Witnessing/Bakering receipting functionality
+    """ Endpoint class for Witnessing receipting functionality
 
      Most times a witness will be able to return its receipt for an event inband.  This API
      will provide that functionality.  When an event needs to be escrowed, this POST API
@@ -418,14 +330,15 @@ class ReceiptEnd(doing.DoDoer):
 
      """
 
-    def __init__(self, hab, inbound=None, outbound=None, ledger=None):
+    def __init__(self, hab, queue, inbound=None, outbound=None, aids=None):
         self.hab = hab
+        self.queue = queue
         self.inbound = inbound if inbound is not None else decking.Deck()
         self.outbound = outbound if outbound is not None else decking.Deck()
+        self.aids = aids
         self.receipts = set()
         self.psr = parsing.Parser(framed=True,
                                   kvy=self.hab.kvy)
-        self.ledger = ledger
 
         super(ReceiptEnd, self).__init__(doers=[doing.doify(self.interceptDo)])
 
@@ -446,9 +359,12 @@ class ReceiptEnd(doing.DoDoer):
         rep.set_header('connection', "close")
 
         cr = httping.parseCesrHttpRequest(req=req)
-        serder = eventing.Serder(ked=cr.payload, kind=eventing.Serials.json)
+        serder = serdering.SerderKERI(sad=cr.payload, kind=eventing.Kinds.json)
 
         pre = serder.ked["i"]
+        if self.aids is not None and pre not in self.aids:
+            raise falcon.HTTPBadRequest(description=f"invalid AID={pre} for witnessing receipting")
+
         ilk = serder.ked["t"]
         if ilk not in (Ilks.icp, Ilks.rot, Ilks.ixn, Ilks.dip, Ilks.drt):
             raise falcon.HTTPBadRequest(description=f"invalid event type ({ilk})for receipting")
@@ -456,7 +372,11 @@ class ReceiptEnd(doing.DoDoer):
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
 
-        self.psr.parseOne(ims=msg)
+        # Check duplicated event
+        existing_said = self.hab.db.getKeLast(key=dbing.snKey(pre=pre,
+                                                        sn=serder.sn))
+
+        self.psr.parseOne(ims=bytearray(msg), local=True)
 
         if pre in self.hab.kevers:
             kever = self.hab.kevers[pre]
@@ -467,16 +387,11 @@ class ReceiptEnd(doing.DoDoer):
                                                         f"{serder.sn}: wits={wits}")
 
             rct = self.hab.receipt(serder)
-
             self.psr.parseOne(bytes(rct))
 
-            if self.ledger:
-                try:
-                    event = eventing.loadEvent(self.hab.db, pre, serder.saidb)
-                    self.ledger.publishEvent(event)
-                    
-                except Exception as e:
-                    logger.error(f"ledger error: {e}")
+            if not existing_said:
+                evt = self.hab.db.cloneEvtMsg(pre=serder.pre, fn=0, dig=serder.said)
+                self.queue.pushToQueued(serder.pre, bytearray(evt))
 
             rep.set_header('Content-Type', "application/json+cesr")
             rep.status = falcon.HTTP_200
@@ -516,7 +431,7 @@ class ReceiptEnd(doing.DoDoer):
         if not (raw := self.hab.db.getEvt(key=dgkey)):
             raise falcon.HTTPNotFound(description="Missing event for dig={}.".format(said))
 
-        serder = coring.Serder(raw=bytes(raw))
+        serder = serdering.SerderKERI(raw=bytes(raw))
         if serder.sn > 0:
             wits = [wit.qb64 for wit in self.hab.kvy.fetchWitnessState(pre, serder.sn)]
         else:
@@ -530,18 +445,10 @@ class ReceiptEnd(doing.DoDoer):
                                    said=said.decode("utf-8"))
         rct = bytearray(rserder.raw)
         if wigs := self.hab.db.getWigs(key=dgkey):
-            rct.extend(coring.Counter(code=coring.CtrDex.WitnessIdxSigs,
-                                      count=len(wigs)).qb64b)
+            rct.extend(Counter(Codens.WitnessIdxSigs, count=len(wigs),
+                               gvrsn=kering.Vrsn_1_0).qb64b)
             for wig in wigs:
                 rct.extend(wig)
-
-        if self.ledger:
-            try:
-                event = eventing.loadEvent(self.hab.db, pre, serder.saidb)
-                self.ledger.publishEvent(event)
-                
-            except Exception as e:
-                logger.error(f"ledger error: {e}")
 
         rep.set_header('Content-Type', "application/json+cesr")
         rep.status = falcon.HTTP_200
@@ -578,3 +485,99 @@ class ReceiptEnd(doing.DoDoer):
                 yield self.tock
 
             yield self.tock
+
+class QryRpyMailboxIterable:
+
+    def __init__(self, cues, mbx, said, queue, retry=5000, hab=None):
+        self.mbx = mbx
+        self.retry = retry
+        self.cues = cues
+        self.said = said
+        self.iter = None
+        self.hab = hab
+        self.queue = queue
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.iter is None:
+            if self.cues:
+                cue = self.cues.popleft()
+                serder = cue["serder"]
+                if serder.said == self.said:
+                    kin = cue["kin"]
+                    if kin == "stream":
+                        self.iter = iter(MailboxIterable(mbx=self.mbx, pre=cue["pre"], topics=cue["topics"],
+                                                         retry=self.retry, hab=self.hab, queue=self.queue))
+                else:
+                    self.cues.append(cue)
+            return b''
+
+        return next(self.iter)
+
+class MailboxIterable:
+    TimeoutMBX = 30000000
+
+    def __init__(self, mbx, pre, topics, queue, retry=5000, hab=None):
+        self.mbx = mbx
+        self.pre = pre
+        self.topics = topics
+        self.retry = retry
+        self.hab = hab
+        self.queue = queue
+
+    def __iter__(self):
+        self.start = self.end = time.perf_counter()
+        return self
+
+    def __next__(self):
+        if self.end - self.start < self.TimeoutMBX:
+            if self.start == self.end:
+                self.end = time.perf_counter()
+                return bytearray(f"retry: {self.retry}\n\n".encode("utf-8"))
+
+            data = bytearray()
+            for topic, idx in self.topics.items():
+                key = self.pre + topic
+                for fn, _, msg in self.mbx.cloneTopicIter(key, idx):
+                    data.extend(bytearray("id: {}\nevent: {}\nretry: {}\ndata: ".format(fn, topic, self.retry)
+                                          .encode("utf-8")))
+                    data.extend(msg)
+                    data.extend(b'\n\n')
+                    idx = idx + 1
+                    self.start = time.perf_counter()
+
+                self.topics[topic] = idx
+            self.end = time.perf_counter()
+            return data
+
+        raise StopIteration
+
+
+class SchemaEnd():
+    def __init__(self, hab, queue):
+        self.hab = hab
+        self.queue = queue
+
+    def on_post(self, req: falcon.Request, rep: falcon.Response):
+        if req.method == "OPTIONS":
+            rep.status = falcon.HTTP_200
+            return
+
+        rep.set_header('Cache-Control', "no-cache")
+        rep.set_header('connection', "close")
+        data = bytes(req.bounded_stream.read())
+
+        try:
+            schemer = scheming.Schemer(raw=data)
+            existing_schemer = self.hab.db.schema.get(keys=(schemer.said,))
+
+            if not existing_schemer:
+                self.hab.db.schema.pin(keys=(schemer.said,), val=schemer)
+                self.queue.pushToQueued("", schemer.raw, CardanoType.SCHEMA)
+        except kering.ValidationError as e:
+            logger.debug(f"Error parsing schema: {e}")
+            raise falcon.HTTPBadRequest(description="Invalid schema")
+
+        rep.status = falcon.HTTP_204

@@ -5,7 +5,7 @@ from glob import glob
 
 
 setup(
-    name='backer', 
+    name='backer',
     version='0.1',
     license='Apache Software License 2.0',
     description='KERI Cardano Registrar Backer',
@@ -19,13 +19,14 @@ setup(
             'backer = backer.cli.backer:main',
         ]
     },
-    python_requires='>=3.10.4',
+    python_requires='>=3.12.0',
     install_requires=[
         'hio>=0.6.9',
-        'keri>=1.0.0',
+        'keri==1.2.2',
         'multicommand>=1.0.0',
-        'blockfrost-python==0.5.2',
-        'pycardano==0.7.0',
-        'pprintpp>=0.4.0'
+        'blockfrost-python==0.6.0',
+        'pycardano==0.12.0',
+        'pprintpp>=0.4.0',
+        'ogmios>=1.2.1'
     ]
     )

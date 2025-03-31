@@ -4,8 +4,8 @@ CARDANO BACKER
 backer.cli.commands module
 """
 import multicommand
+import traceback
 from keri import help
-
 from keri.app import directing
 from backer.cli import commands
 
@@ -26,6 +26,7 @@ def main():
 
     except Exception as ex:
         print(f"ERR: {ex}")
+        traceback.print_exc()
         return -1
 
 
