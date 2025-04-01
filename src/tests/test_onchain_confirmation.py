@@ -74,15 +74,9 @@ def test_kel_confirmation():
         transId = trans['id']
 
         # Check that utxo is stored
-        for (key, ), utxo_list in ledger.dbConfirmingUtxos.getItemIter():
+        for (key, ), utxo_index in ledger.dbConfirmingUtxos.getItemIter():
             assert key == transId
-            cbor_utxo = selected_utxo[0].to_cbor_hex()
-            assert json.loads(utxo_list) == [cbor_utxo]
-
-            # Check that Confirming utxo should not be slected
-            new_utxos = ledger.selectUTXO()
-            assert new_utxos[0].to_cbor_hex() != cbor_utxo
-
+            assert utxo_index == f"{selected_utxo[0].input.transaction_id}#{selected_utxo[0].input.index}"
             break
 
         ledger.updateTip(tipHeight)

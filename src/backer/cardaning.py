@@ -6,9 +6,7 @@ keri.ledger.cardaning module
 Registrar Backer operations on Cardano Ledger
 
 """
-
 from enum import Enum
-from typing import Union
 import json
 import pycardano
 import os
@@ -17,7 +15,6 @@ from keri import help
 from keri.db import subing
 from keri.core import serdering, scheming
 from backer.constants import METADATUM_LABEL_KEL, METADATUM_LABEL_SCHEMA
-from ogmios.client import Client as OgmiosClient
 
 logger = help.ogler.getLogger()
 
@@ -54,14 +51,6 @@ class CardanoDBName(Enum):
     SCHEMA_CONFIRMING = "schemadb_confirming"
     CONFIRMING_UTXOS = "confirming_utxo"
 
-class CardanoOgmiosV6ChainContext(pycardano.OgmiosV6ChainContext):
-    def submit_tx_cbor(self, cbor: Union[bytes, str]):
-        if isinstance(cbor, bytes):
-            cbor = cbor.hex()
-
-        with OgmiosClient(self.host, self.port, self.secure) as client:
-            return client.submit_transaction.execute(cbor)
-
 class Cardano:
     """
     Environment variables required:
@@ -88,9 +77,9 @@ class Cardano:
         self.schemadb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_PUBLISHED.value)
         self.schemadbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_CONFIRMING.value)
 
-        self.dbConfirmingUtxos = subing.Suber(db=hab.db, subkey=CardanoDBName.CONFIRMING_UTXOS.value)
+        self.dbConfirmingUtxos = subing.DupSuber(db=hab.db, subkey=CardanoDBName.CONFIRMING_UTXOS.value)
 
-        self.context = CardanoOgmiosV6ChainContext()
+        self.context = pycardano.OgmiosV6ChainContext()
         self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
         self.tipHeight = 0
 
@@ -216,31 +205,38 @@ class Cardano:
         if not submitting_tx_cbor:
             return
 
+        transId = str(signed_tx.id)
+        submitting_trans = {
+            "id": transId,
+            "type": type.value,
+            "keri_raw": submitting_items,
+            "tip": self.tipHeight,
+        }
+        utxoIds = [f"{str(utxo.input.transaction_id)}#{utxo.input.index}" for utxo in utxos]
+
+        dbConfirming.pin(keys=submitting_trans["id"], val=json.dumps(submitting_trans).encode('utf-8'))
+        self.dbConfirmingUtxos.pin(keys=submitting_trans["id"], vals=utxoIds)
+
         # Submit transaction
-        submitted_trans = None
         try:
-            (transId, _) = self.context.submit_tx_cbor(submitting_tx_cbor)
-            submitted_trans = {
-                "id": transId,
-                "type": type.value,
-                "keri_raw": submitting_items,
-                "tip": self.tipHeight,
-            }
-            logger.debug(f"Submitted tx: {submitted_trans}")
-        except Exception as e:
-            logger.critical(f"ERROR: Submit tx: {e}")
+            self.context.submit_tx_cbor(submitting_tx_cbor)
 
-        # Remove submitted events from queue and add them into published
-        if submitted_trans:
-            dbConfirming.pin(keys=submitted_trans["id"], val=json.dumps(submitted_trans).encode('utf-8'))
-
-            utxoCborList = [utxo.to_cbor_hex() for utxo in utxos]
-            self.dbConfirmingUtxos.pin(keys=submitted_trans["id"], val=json.dumps(utxoCborList))
-
+            # Remove submitted events from queue and add them into published
             for event in submitting_items:
                 event = event.encode('utf-8')
                 self.addToPublished(event, type)
                 self.removeFromQueue(event, type)
+
+            logger.debug(f"Submitted tx: {submitting_trans}")
+        except Exception as e:
+            logger.critical(f"ERROR: Submit tx: {e}")
+            # Remove from confirming
+            self.dbConfirmingUtxos.rem(keys=submitting_trans["id"])
+            dbConfirming.rem(submitting_trans["id"])
+
+            # Add back to queue
+            for keri_item in submitting_trans['keri_raw']:
+                self.addToQueue(keri_item.encode('utf-8'), type)
 
     def getConfirmingTrans(self, transId):
         tx = self.schemadbConfirming.get(transId)
@@ -270,14 +266,11 @@ class Cardano:
             logger.critical(f"Cannot rollback transaction: {e}")
 
     def isInConfirmingUTxO(self, utxo):
-        for _, utxoList in self.dbConfirmingUtxos.getItemIter():
-            try:
-                utxoList = json.loads(utxoList)
+        utxoIndex = f"{utxo.input.transaction_id}#{utxo.input.index}"
 
-                if utxo.to_cbor_hex() in utxoList:
-                    return True
-            except Exception as e:
-                logger.critical(f"Cannot parse confirming UTXO for checking: {e}")
+        for _, utxoIndexItem in self.dbConfirmingUtxos.getItemIter():
+            if utxoIndexItem == utxoIndex:
+                return True
 
         return False
 
