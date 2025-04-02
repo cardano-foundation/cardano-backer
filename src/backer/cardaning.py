@@ -230,13 +230,13 @@ class Cardano:
             logger.debug(f"Submitted tx: {submitting_trans}")
         except Exception as e:
             logger.critical(f"ERROR: Submit tx: {e}")
-            # Remove from confirming
-            self.dbConfirmingUtxos.rem(keys=submitting_trans["id"])
-            dbConfirming.rem(submitting_trans["id"])
-
             # Add back to queue
             for keri_item in submitting_trans['keri_raw']:
                 self.addToQueue(keri_item.encode('utf-8'), type)
+
+            # Remove from confirming
+            self.dbConfirmingUtxos.rem(keys=submitting_trans["id"])
+            dbConfirming.rem(submitting_trans["id"])
 
     def getConfirmingTrans(self, transId):
         tx = self.schemadbConfirming.get(transId)
@@ -266,10 +266,10 @@ class Cardano:
             logger.critical(f"Cannot rollback transaction: {e}")
 
     def isInConfirmingUTxO(self, utxo):
-        utxoIndex = f"{utxo.input.transaction_id}#{utxo.input.index}"
+        utxoId = f"{utxo.input.transaction_id}#{utxo.input.index}"
 
-        for _, utxoIndexItem in self.dbConfirmingUtxos.getItemIter():
-            if utxoIndexItem == utxoIndex:
+        for _, confirmingUtxoId  in self.dbConfirmingUtxos.getItemIter():
+            if confirmingUtxoId  == utxoId:
                 return True
 
         return False
