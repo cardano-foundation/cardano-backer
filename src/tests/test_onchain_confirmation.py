@@ -57,6 +57,9 @@ def test_kel_confirmation():
 
         # Submit event
         ledger.updateTip(tipHeight - 1)
+
+        selected_utxo = ledger.selectUTXO()
+
         ledger.publishEvents(type=cardaning.CardanoType.KEL)
         trans = None
 
@@ -69,6 +72,13 @@ def test_kel_confirmation():
         assert trans['keri_raw'] == [msg.decode('utf-8')]
 
         transId = trans['id']
+
+        # Check that utxo is stored
+        for (key, ), utxo_index in ledger.dbConfirmingUtxos.getItemIter():
+            assert key == transId
+            assert utxo_index == f"{selected_utxo[0].input.transaction_id}#{selected_utxo[0].input.index}"
+            break
+
         ledger.updateTip(tipHeight)
         trans['block_height'] = blockHeight
         ledger.updateTrans(trans, type=cardaning.CardanoType.KEL)
@@ -85,6 +95,7 @@ def test_kel_confirmation():
         ledger.updateTrans(trans, type=cardaning.CardanoType.KEL)
         ledger.confirmTrans(type=cardaning.CardanoType.KEL)
         wait_for_updating_utxo()
+
         ledger.publishEvents(type=cardaning.CardanoType.KEL)
 
         confirmingTrans = ledger.getConfirmingTrans(transId)
