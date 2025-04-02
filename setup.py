@@ -21,11 +21,11 @@ setup(
     },
     python_requires='>=3.12.0',
     install_requires=[
-        'hio==0.6.14',
+        'hio==0.6.17',
         'keri==1.2.2',
         'multicommand>=1.0.0',
         'pycardano==0.12.0',
         'pprintpp>=0.4.0',
-        'ogmios==1.4.2'
+        'ogmios>=1.3.0'
     ]
     )
