@@ -77,7 +77,11 @@ class Cardano:
         self.schemadb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_PUBLISHED.value)
         self.schemadbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_CONFIRMING.value)
 
-        self.context = pycardano.OgmiosV6ChainContext()
+        self.context = pycardano.OgmiosV6ChainContext(
+            host=OGMIOS_HOST,
+            port=OGMIOS_PORT,
+            network=NETWORK
+        )
         self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
         self.tipHeight = 0
 
