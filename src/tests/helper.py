@@ -3,13 +3,19 @@ import time
 import subprocess
 import shutil
 import socket
+import falcon
 
+from pathlib import Path
+from falcon.testing import TestClient
 from keri import help
+from keri.app import habbing, keeping
+from backer import cardaning, queueing
+from keri.app.cli.common import existing
 
 logger = help.ogler.getLogger()
 
 BACKER_SALT = "0ACDEyMzQ1Njc4OWxtbm9aBc"
-BACKER_TEST_STORE_DIR = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir, os.pardir, "tests", "store"))
+BACKER_TEST_STORE_DIR = "tests/store"
 BACKER_TEST_PORT = 5668
 BACKER_TEST_TPORT = 5667
 WALLET_ADDRESS_CBORHEX = "5820339f8d1757c2c19ba62146d98400be157cdbbe149a4200bd9cc68ef457c201f8"
@@ -40,76 +46,70 @@ def is_process_running(proc_path, proc_port):
         logger.critical(f"Error: {e}")
         return False
 
+def set_test_env():
+    os.environ["BACKER_SALT"] = BACKER_SALT
+    os.environ["BACKER_PORT"] = str(BACKER_TEST_PORT)
+    os.environ["BACKER_TPORT"] = str(BACKER_TEST_TPORT)
+    os.environ["BACKER_STORE_DIR"] = BACKER_TEST_STORE_DIR
+    os.environ["WALLET_ADDRESS_CBORHEX"] = WALLET_ADDRESS_CBORHEX
 
-def wait_for_port(port, host="0.0.0.0", timeout=START_SERVICE_TIMEOUT, check_interval=2):
-    start_time = time.time()
+class TestEnd:
+    def __init__(self):
+        set_test_env()
 
-    while time.time() - start_time < timeout:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(1)
-            result = s.connect_ex((host, port))
-            if result == 0:
-                logger.info(f"Port {port} is now LISTENING.")
-                return True
-        logger.info(f"Waiting for port {port} to be available...")
-        time.sleep(check_interval)
+    def make_test_end(self, route, endclass, cues=None):
+        name = "testbacker"
+        bran = ""
+        alias = "testbacker"
+        ks = keeping.Keeper(name=name,
+                        base=BACKER_TEST_STORE_DIR,
+                        temp=True,
+                        reopen=True)
+        aeid = ks.gbls.get('aeid')
 
-    logger.info(f"Timeout: Port {port} is still not available after {timeout} seconds.")
-    return False
-
-
-class MockBacker:
-    def __init__(self, dir_path=None):
-        self.set_test_env()
-
-        if dir_path:
-            self.dir_path = dir_path
+        if aeid is None:
+            hby = habbing.Habery(name=name, base=BACKER_TEST_STORE_DIR, bran=bran)
         else:
-            self.dir_path = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir, os.pardir, "scripts"))
+            hby = existing.setupHby(name=name, base=BACKER_TEST_STORE_DIR, bran=bran)
 
-        self.start_backer_path = os.path.abspath(os.path.join(self.dir_path, START_BACKER_SCRIPT))
+        hab = hby.habByName(name=alias)
+        if hab is None:
+            hab = hby.makeHab(name=alias, transferable=False)
 
-    def set_test_env(self):
-        os.environ["BACKER_SALT"] = BACKER_SALT
-        os.environ["BACKER_PORT"] = str(BACKER_TEST_PORT)
-        os.environ["BACKER_TPORT"] = str(BACKER_TEST_TPORT)
-        os.environ["BACKER_STORE_DIR"] = BACKER_TEST_STORE_DIR
-        os.environ["WALLET_ADDRESS_CBORHEX"] = WALLET_ADDRESS_CBORHEX
+        ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+        queue = queueing.Queueing(hab=hab, ledger=ledger)
 
-    def start_backer(self):
-        """Start the script in the background"""
+        app = falcon.App()
+        client = TestClient(app)
 
-        if is_process_running("bin/backer", BACKER_TEST_PORT):
-            self.stop_backer()  # Stop the backer if it's already running
-            time.sleep(1)
+        if cues:
+            endResource = endclass(hab=hab, queue=queue, cues=cues)
+        else:
+            endResource = endclass(hab=hab, queue=queue)
 
-        try:
-            self.process = subprocess.Popen(["bash", self.start_backer_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            wait_for_port(BACKER_TEST_PORT)  # Wait for the backer to start listening
-            logger.info(f"Backer started in background with PID: {self.process.pid}")
-        except Exception as e:
-            logger.critical("Start backer failed:\n%s", e)
+        app.add_route(route, endResource)
 
-    def stop_backer(self):
-        """Stop the backer"""
-        try:
-            subprocess.run("pkill -f 'bin/backer.*start|.*backer.*/bin/sh'", shell=True)
-            time.sleep(1)
-            logger.info("Backer stopped")
-        except Exception as e:
-            logger.critical("Stop backer failed:\n%s", e)
+        return hby, hab, client, ledger
 
 class TestBase:
     @classmethod
     def setup_class(cls):
-        cls.mock_backer = MockBacker()
-        cls.mock_backer.start_backer()
+        set_test_env()
 
     @classmethod
     def teardown_class(cls):
-        cls.mock_backer.stop_backer()
-
         # Remove test data
         if os.path.exists(BACKER_TEST_STORE_DIR):
             shutil.rmtree(BACKER_TEST_STORE_DIR)
 
+        # Expand user home and define paths
+        paths = [
+            Path("~/.keri/db/tests").expanduser(),
+            Path("~/.keri/cf/tests").expanduser(),
+            Path("~/.keri/ks/tests").expanduser()
+        ]
+
+        # Remove each directory if it exists
+        for path in paths:
+            if path.exists() and path.is_dir():
+                shutil.rmtree(path)
