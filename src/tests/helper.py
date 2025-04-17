@@ -54,10 +54,8 @@ def set_test_env():
     os.environ["WALLET_ADDRESS_CBORHEX"] = WALLET_ADDRESS_CBORHEX
 
 class TestEnd:
-    def __init__(self):
-        set_test_env()
-
     def make_test_end(self, route, endclass, cues=None):
+        set_test_env()
         name = "testbacker"
         bran = ""
         alias = "testbacker"
