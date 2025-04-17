@@ -17,8 +17,8 @@ TRANSACTION_SECURITY_DEPTH = 16
 TRANSACTION_TIMEOUT_DEPTH = 32
 logger = help.ogler.getLogger()
 
-class TestReceipt(TestBase):
 
+class TestUtxos(TestBase):
     def wait_for_updating_utxo(cls):
         time.sleep(UTXO_DELAY)
 
@@ -27,7 +27,7 @@ class TestReceipt(TestBase):
         salt = b"0123456789abcdef"
         salter = Salter(raw=salt)
 
-        with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:
+        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby:
             hab = hby.makeHab("test03", transferable=False)
             icp = {
                 "v": "KERI10JSON00012b_",
@@ -60,6 +60,9 @@ class TestReceipt(TestBase):
 
             # Submit event
             ledger.updateTip(tipHeight - 1)
+
+            selected_utxo = ledger.selectUTXO()
+
             ledger.publishEvents(type=cardaning.CardanoType.KEL)
             trans = None
 
@@ -72,6 +75,13 @@ class TestReceipt(TestBase):
             assert trans['keri_raw'] == [msg.decode('utf-8')]
 
             transId = trans['id']
+
+            # Check that utxo is stored
+            for (key, ), utxo_index in ledger.dbConfirmingUtxos.getItemIter():
+                assert key == transId
+                assert utxo_index == f"{selected_utxo[0].input.transaction_id}#{selected_utxo[0].input.index}"
+                break
+
             ledger.updateTip(tipHeight)
             trans['block_height'] = blockHeight
             ledger.updateTrans(trans, type=cardaning.CardanoType.KEL)
@@ -88,6 +98,7 @@ class TestReceipt(TestBase):
             ledger.updateTrans(trans, type=cardaning.CardanoType.KEL)
             ledger.confirmTrans(type=cardaning.CardanoType.KEL)
             cls.wait_for_updating_utxo()
+
             ledger.publishEvents(type=cardaning.CardanoType.KEL)
 
             confirmingTrans = ledger.getConfirmingTrans(transId)
@@ -144,7 +155,7 @@ class TestReceipt(TestBase):
         salt = b"0123456789abcdef"
         salter = Salter(raw=salt)
 
-        with habbing.openHby(name="keria", salt=salter.qb64, temp=True) as hby:
+        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby:
             hab = hby.makeHab("test03", transferable=False)
             schema = {
                 "$id": "EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdcczw",

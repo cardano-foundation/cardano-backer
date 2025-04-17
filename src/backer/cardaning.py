@@ -6,7 +6,6 @@ keri.ledger.cardaning module
 Registrar Backer operations on Cardano Ledger
 
 """
-
 from enum import Enum
 import json
 import pycardano
@@ -50,6 +49,7 @@ class CardanoDBName(Enum):
     SCHEMA_QUEUED = "schemadb_queued"
     SCHEMA_PUBLISHED = "schemadb_published"
     SCHEMA_CONFIRMING = "schemadb_confirming"
+    CONFIRMING_UTXOS = "confirming_utxo"
 
 class Cardano:
     """
@@ -77,6 +77,7 @@ class Cardano:
         self.schemadb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_PUBLISHED.value)
         self.schemadbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_CONFIRMING.value)
 
+        self.dbConfirmingUtxos = subing.DupSuber(db=hab.db, subkey=CardanoDBName.CONFIRMING_UTXOS.value)
         self.context = pycardano.OgmiosV6ChainContext(
             host=OGMIOS_HOST,
             port=OGMIOS_PORT,
@@ -141,11 +142,31 @@ class Cardano:
             serder = serdering.SerderKERI(raw=event)
             self.keldb_published.pin(keys=(serder.pre, serder.said), val=event)
 
+    def selectUTXO(self):
+        # TODO: We need more advanced UTXO selection in the future.
+        # For now, it just selects one and assumes it'll have enough.
+        # Deployments should fund the address with 1 or X UTXOs of sufficient size.
+
+        # Select the first utxo from spending address
+        utxos = self.context.utxos(self.spending_addr)
+
+        for utxo in utxos:
+            if not self.isInConfirmingUTxO(utxo):
+                return [utxo]
+
+        return []
+
     def publishEvents(self, type:CardanoType):
         keri_data = bytearray()
         submitting_items = []
         submitting_tx_cbor = None
         temp_tx_cbor = None
+
+        utxos = self.selectUTXO()
+
+        if len(utxos) < 1:
+            logger.critical("ERROR: No UTXO available")
+            return
 
         db_queued = self.getCardanoDB(type, CardanoDBType.QUEUED)
         dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
@@ -153,7 +174,10 @@ class Cardano:
         for _, event in reversed(list(db_queued.getItemIter())):
             # Build transaction
             builder = pycardano.TransactionBuilder(self.context)
-            builder.add_input_address(self.spending_addr)
+
+            for utxo in utxos:
+                builder.add_input(utxo)
+
             builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
             keri_data = keri_data + event.encode('utf-8')
             keri_data_bytes = bytes(keri_data)
@@ -183,30 +207,39 @@ class Cardano:
 
         if not submitting_tx_cbor:
             return
+
+        transId = str(signed_tx.id)
+        submitting_trans = {
+            "id": transId,
+            "type": type.value,
+            "keri_raw": submitting_items,
+            "tip": self.tipHeight,
+        }
+        utxoIds = [f"{str(utxo.input.transaction_id)}#{utxo.input.index}" for utxo in utxos]
+
+        dbConfirming.pin(keys=submitting_trans["id"], val=json.dumps(submitting_trans).encode('utf-8'))
+        self.dbConfirmingUtxos.pin(keys=submitting_trans["id"], vals=utxoIds)
+
         # Submit transaction
-        submitted_trans = None
         try:
             self.context.submit_tx_cbor(submitting_tx_cbor)
-            transId = str(signed_tx.transaction_body.inputs[0].transaction_id)
-            submitted_trans = {
-                "id": transId,
-                "type": type.value,
-                "keri_raw": submitting_items,
-                "tip": self.tipHeight
-            }
-            logger.debug(f"Submitted tx: {submitted_trans}")
-        except Exception as e:
-            logger.critical(f"ERROR: Submit tx: {e}")
 
-        # Remove submitted events from queue and add them into published
-        if submitted_trans:
-            dbConfirming.pin(keys=submitted_trans["id"], val=json.dumps(submitted_trans).encode('utf-8'))
-
+            # Remove submitted events from queue and add them into published
             for event in submitting_items:
                 event = event.encode('utf-8')
                 self.addToPublished(event, type)
                 self.removeFromQueue(event, type)
 
+            logger.debug(f"Submitted tx: {submitting_trans}")
+        except Exception as e:
+            logger.critical(f"ERROR: Submit tx: {e}")
+            # Add back to queue
+            for keri_item in submitting_trans['keri_raw']:
+                self.addToQueue(keri_item.encode('utf-8'), type)
+
+            # Remove from confirming
+            self.dbConfirmingUtxos.rem(keys=submitting_trans["id"])
+            dbConfirming.rem(submitting_trans["id"])
 
     def getConfirmingTrans(self, transId):
         tx = self.schemadbConfirming.get(transId)
@@ -235,6 +268,15 @@ class Cardano:
         except Exception as e:
             logger.critical(f"Cannot rollback transaction: {e}")
 
+    def isInConfirmingUTxO(self, utxo):
+        utxoId = f"{utxo.input.transaction_id}#{utxo.input.index}"
+
+        for _, confirmingUtxoId  in self.dbConfirmingUtxos.getItemIter():
+            if confirmingUtxoId  == utxoId:
+                return True
+
+        return False
+
     def confirmTrans(self, type: CardanoType):
         dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
         try:
@@ -249,6 +291,7 @@ class Cardano:
                 # Check for confirmation
                 if self.tipHeight > 0 and blockHeight > 0 and self.tipHeight - blockHeight >= TRANSACTION_SECURITY_DEPTH:
                     dbConfirming.rem(keys)
+                    self.dbConfirmingUtxos.rem(keys)
                     continue
 
                 if self.tipHeight - transTip > TRANSACTION_TIMEOUT_DEPTH:
@@ -256,6 +299,8 @@ class Cardano:
                         self.addToQueue(keri_item.encode('utf-8'), type)
 
                     dbConfirming.rem(keys)
+                    self.dbConfirmingUtxos.rem(keys)
+
         except Exception as e:
             logger.critical(f"Cannot confirm transaction: {e}")
 
