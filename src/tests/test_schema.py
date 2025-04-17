@@ -1,93 +1,83 @@
-import os
 import time
-import requests
+import logging
+from keri import help
 from keri.core import scheming
 from hio.help import Hict
-from keri.app.cli.common import existing
-from backer import cardaning
+from backer import cardaning, backering
+from tests.helper import TestEnd, TestBase
 
-RECEIPT_ENDPOINT = "http://localhost:5668/schemas"
+SCHEMA_ROUTE = "/schemas"
+class TestSchema(TestBase):
+    @classmethod
+    def setup_class(cls):
+        help.ogler.resetLevel(level=logging.DEBUG, globally=True)
+        test_end = TestEnd()
+        cls.hby, cls.hab, cls.client, cls.ledger = test_end.make_test_end(SCHEMA_ROUTE, backering.SchemaEnd)
 
-def test_invalid_schema_format():
-    schema = (b'{"$id":"EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdccza","$schema":"http://json'
-                b'-schema.org/draft-07/schema#","type":"object","properties":{"a":{"type":"str'
-                b'ing"},"b":{"type":"number"},"c":{"type":"string","format":"date-time"}}}')
+    def test_invalid_schema_format(cls):
+        schema = (b'{"$id":"EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdccza","$schema":"http://json'
+                    b'-schema.org/draft-07/schema#","type":"object","properties":{"a":{"type":"str'
+                    b'ing"},"b":{"type":"number"},"c":{"type":"string","format":"date-time"}}}')
 
-    CESR_CONTENT_TYPE = "application/cesr+json"
+        CESR_CONTENT_TYPE = "application/cesr+json"
 
-    headers = Hict(
-        [
-            ("Content-Type", CESR_CONTENT_TYPE),
-            ("Content-Length", str(len(schema)))
-        ]
-    )
-
-    # Invalid schema format
-    res = requests.request(
-            "POST", RECEIPT_ENDPOINT, headers=headers, data=schema
+        headers = Hict(
+            [
+                ("Content-Type", CESR_CONTENT_TYPE),
+                ("Content-Length", str(len(schema)))
+            ]
         )
-    assert res.status_code == 400 and "Invalid schema" in str(res.json())
+
+        res = cls.client.simulate_post(path=SCHEMA_ROUTE, body=schema, headers=headers, content_type=CESR_CONTENT_TYPE)
+        assert res.status_code == 400 and "Invalid schema" in str(res.text)
 
 
-def test_valid_schema_format():
-    schema = (b'{"$id":"EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdcczw","$schema":"http://json'
-                b'-schema.org/draft-07/schema#","type":"object","properties":{"a":{"type":"str'
-                b'ing"},"b":{"type":"number"},"c":{"type":"string","format":"date-time"}}}')
+    def test_valid_schema_format(cls):
+        schema = (b'{"$id":"EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdcczw","$schema":"http://json'
+                    b'-schema.org/draft-07/schema#","type":"object","properties":{"a":{"type":"str'
+                    b'ing"},"b":{"type":"number"},"c":{"type":"string","format":"date-time"}}}')
 
-    CESR_CONTENT_TYPE = "application/cesr+json"
+        CESR_CONTENT_TYPE = "application/cesr+json"
 
-    headers = Hict(
-        [
-            ("Content-Type", CESR_CONTENT_TYPE),
-            ("Content-Length", str(len(schema)))
-        ]
-    )
+        headers = Hict(
+            [
+                ("Content-Type", CESR_CONTENT_TYPE),
+                ("Content-Length", str(len(schema)))
+            ]
+        )
 
-    res = requests.request(
-        "POST", RECEIPT_ENDPOINT, headers=headers, data=schema
-    )
-    assert res.status_code == 204
+        res = cls.client.simulate_post(path=SCHEMA_ROUTE, body=schema, headers=headers, content_type=CESR_CONTENT_TYPE)
+        assert res.status_code == 204
 
-    if res.status_code == 204:
-            name = "backer"
-            bran = ""
-            alias = "backer"
-            base = os.path.join(os.getcwd(), "store")
+        if res.status_code == 204:
+                ledger = cardaning.Cardano(hab=cls.hab, ks=cls.hab.ks)
+                schemer = scheming.Schemer(raw=schema)
+                queued_event = ledger.schemadb_queued.get((schemer.said, ))
+                queued_schemer = scheming.Schemer(raw=queued_event.encode('utf-8'))
 
-            hby = existing.setupHby(name=name, base=base, bran=bran)
-            hab = hby.habByName(name=alias)
-            ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+                assert queued_schemer.said == schemer.said
 
-            schemer = scheming.Schemer(raw=schema)
+                # Wait for schemer to be published
+                timeout = 30
+                start_time = time.time()
+                while True:
+                    published_schemer = ledger.schemadb_published.get((schemer.said, ))
 
-            queued_event = ledger.schemadb_queued.get((schemer.said, ))
-            queued_schemer = scheming.Schemer(raw=queued_event.encode('utf-8'))
+                    if published_schemer:
+                        print("Schemer published")
+                        break
+                    else:
+                        print("Waiting for schemer to be published...")
 
-            assert queued_schemer.said == schemer.said
+                    if time.time() - start_time > timeout:
+                        print("Timeout")
+                        break
 
-            # Wait for schemer to be published
-            timeout = 30
-            start_time = time.time()
-            while True:
-                published_schemer = ledger.schemadb_published.get((schemer.said, ))
+                    time.sleep(1)
 
-                if published_schemer:
-                    print("Schemer published")
-                    break
-                else:
-                    print("Waiting for schemer to be published...")
+                res = cls.client.simulate_post(path=SCHEMA_ROUTE, body=schema, headers=headers, content_type=CESR_CONTENT_TYPE)
 
-                if time.time() - start_time > timeout:
-                    print("Timeout")
-                    break
-
-                time.sleep(1)
-
-            res = requests.request(
-                "POST", RECEIPT_ENDPOINT, headers=headers, data=schema
-            )
-
-            assert res.status_code == 204
-            # Schemer is not queued again so It is not published again
-            queued_schemer = ledger.keldb_queued.get((schemer.said, ))
-            assert queued_schemer == None
+                assert res.status_code == 204
+                # Schemer is not queued again so It is not published again
+                queued_schemer = ledger.keldb_queued.get((schemer.said, ))
+                assert queued_schemer == None
