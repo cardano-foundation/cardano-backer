@@ -51,7 +51,7 @@ class Crawler(doing.DoDoer):
                             logger.info(f"Reached tip at slot {block.slot}")
                             self.on_tip = True
                             self.extend(self.backer)
-                            self.tock = 1.0
+                            tock = 1.0
 
                         # Find transactions involving cardano backer
                         if self.on_tip and isinstance(block, ogmios.Block) and hasattr(block, "transactions"):
@@ -78,15 +78,15 @@ class Crawler(doing.DoDoer):
                     try:
                         self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
                         _, _, _ = self.client.find_intersection.execute([tip.to_point()])
-                        self.tock = 0.0
+                        tock = 0.0
                     except Exception as ex:
                         logger.critical(f"Failed to reconnect to ogmios: {ex}")
 
-                yield self.tock
+                yield tock
         except Exception as ex:
             logger.error(f"ERROR: {ex}")
 
-        yield self.tock
+        yield tock
 
     def confirmTrans(self, tymth=None, tock=0.0):
         self.wind(tymth)
