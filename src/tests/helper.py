@@ -25,6 +25,8 @@ DEVNET_PROCESS_PATH = ".yaci-cli/components/ogmios/bin/ogmios"
 START_SERVICE_TIMEOUT = 30
 START_BACKER_SCRIPT = "start_backer.sh"
 
+UTXO_DELAY = 1
+
 
 def is_process_running(proc_path, proc_port):
     """Check if the process is running and includes the expected port argument"""
@@ -90,6 +92,10 @@ class TestEnd:
         return hby, hab, client, ledger
 
 class TestBase:
+    @classmethod
+    def wait_for_updating_utxo(cls):
+        time.sleep(UTXO_DELAY)
+
     @classmethod
     def setup_class(cls):
         set_test_env()

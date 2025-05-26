@@ -77,6 +77,7 @@ class Cardano:
     """
 
     def __init__(self, hab, ks=None):
+        self.onTip = False
         self.pending_kel = []
         self.keldb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_QUEUED.value)
         self.keldb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_PUBLISHED.value)

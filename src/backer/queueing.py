@@ -16,8 +16,10 @@ class Queueing(doing.Doer):
 
     def recur(self, tyme=None):
         while True:
-            self.ledger.publishEvents(type=CardanoType.KEL)
-            self.ledger.publishEvents(type=CardanoType.SCHEMA)
+            if self.ledger.onTip:
+                self.ledger.publishEvents(type=CardanoType.KEL)
+                self.ledger.publishEvents(type=CardanoType.SCHEMA)
+
             yield self.tock
 
     def pushToQueued(self, pre, msg, type=CardanoType.KEL):
