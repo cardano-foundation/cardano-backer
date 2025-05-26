@@ -12,16 +12,12 @@ from keri.core import eventing, serdering, Salter, scheming
 from backer import cardaning, queueing
 from tests.helper import TestBase
 
-UTXO_DELAY = 1
 TRANSACTION_SECURITY_DEPTH = 16
 TRANSACTION_TIMEOUT_DEPTH = 32
 logger = help.ogler.getLogger()
 
 
 class TestUtxos(TestBase):
-    def wait_for_updating_utxo(cls):
-        time.sleep(UTXO_DELAY)
-
     def test_kel_confirmation(cls):
         help.ogler.resetLevel(level=logging.DEBUG, globally=True)
         salt = b"0123456789abcdef"

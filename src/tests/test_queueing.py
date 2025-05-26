@@ -218,6 +218,8 @@ class TestQueueing(TestBase):
             schemadb_queued_items = [(said, schemer) for (said, ), schemer in ledger.schemadb_queued.getItemIter()]
             assert schemadb_queued_items != []
 
+            cls.wait_for_updating_utxo()
+            # Publish events
             ledger.publishEvents(type=cardaning.CardanoType.SCHEMA)
 
             # Verify schemadb_queued published and remove from schemadb_queued

@@ -96,7 +96,7 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
                                           tcpPort=tcp,
                                           httpPort=http,
                                           queue=que)
-    crl = crawling.Crawler(backer=backer, ledger=ledger)
-    doers = [hbyDoer, crl]
+    crl = crawling.Crawler(ledger=ledger)
+    doers = [hbyDoer, *backer, crl]
 
     directing.runController(doers=doers, expire=expire)

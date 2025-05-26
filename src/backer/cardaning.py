@@ -11,8 +11,9 @@ import json
 import pycardano
 import os
 import ogmios
+from dataclasses import dataclass
 from keri import help
-from keri.db import subing
+from keri.db import subing, koming
 from keri.core import serdering, scheming
 from backer.constants import METADATUM_LABEL_KEL, METADATUM_LABEL_SCHEMA
 
@@ -30,6 +31,8 @@ MAX_TRANSACTION_SIZE = 16384
 MAX_TRANSACTION_SIZE_MARGIN = 3 # PyCardano and Ogmios serialize the transaction could result in small variations
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
 OGMIOS_PORT = os.environ.get('OGMIOS_PORT', 1337)
+BACKER_STATE_DB = 'bstt.'
+CURRENT_SYNC_POINT = 'b_syncp'
 
 
 class CardanoType(Enum):
@@ -51,6 +54,12 @@ class CardanoDBName(Enum):
     SCHEMA_CONFIRMING = "schemadb_confirming"
     CONFIRMING_UTXOS = "confirming_utxo"
 
+
+@dataclass
+class PointRecord:
+    id: str 
+    slot: int
+
 class Cardano:
     """
     Environment variables required:
@@ -68,6 +77,7 @@ class Cardano:
     """
 
     def __init__(self, hab, ks=None):
+        self.onTip = False
         self.pending_kel = []
         self.keldb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_QUEUED.value)
         self.keldb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_PUBLISHED.value)
@@ -78,6 +88,11 @@ class Cardano:
         self.schemadbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_CONFIRMING.value)
 
         self.dbConfirmingUtxos = subing.DupSuber(db=hab.db, subkey=CardanoDBName.CONFIRMING_UTXOS.value)
+
+        self.states = koming.Komer(db=hab.db,
+                                   schema=PointRecord,
+                                   subkey=BACKER_STATE_DB)
+
         self.context = pycardano.OgmiosV6ChainContext(
             host=OGMIOS_HOST,
             port=OGMIOS_PORT,
