@@ -32,7 +32,7 @@ MAX_TRANSACTION_SIZE_MARGIN = 3 # PyCardano and Ogmios serialize the transaction
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
 OGMIOS_PORT = os.environ.get('OGMIOS_PORT', 1337)
 BACKER_STATE_DB = 'bstt.'
-BACKER_TIP_KEY = 'b_tip'
+CURRENT_SYNC_POINT = 'b_syncp'
 
 
 class CardanoType(Enum):

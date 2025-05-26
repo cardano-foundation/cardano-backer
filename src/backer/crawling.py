@@ -12,7 +12,7 @@ from hio.base import doing
 from keri import help
 from websockets import ConnectionClosedError
 
-from backer.cardaning import CardanoType, PointRecord, BACKER_TIP_KEY
+from backer.cardaning import CardanoType, PointRecord, CURRENT_SYNC_POINT
 
 
 logger = help.ogler.getLogger()
@@ -35,7 +35,7 @@ class Crawler(doing.DoDoer):
         _ = (yield self.tock)
 
         startPoint = ogmios.Point(START_SLOT_NUMBER, START_BLOCK_HEADER_HASH) if START_SLOT_NUMBER > 0 else ogmios.Origin()
-        lastBlock = self.ledger.states.get(BACKER_TIP_KEY)
+        lastBlock = self.ledger.states.get(CURRENT_SYNC_POINT)
 
         if lastBlock:
             startPoint = ogmios.Point(lastBlock.slot, lastBlock.id)
@@ -81,6 +81,8 @@ class Crawler(doing.DoDoer):
                         self.ledger.updateTip(tip.height)
                         self.ledger.rollbackBlock(block.slot, type=CardanoType.KEL)
                         self.ledger.rollbackBlock(block.slot, type=CardanoType.SCHEMA)
+
+                self.ledger.states.pin(CURRENT_SYNC_POINT, PointRecord(id=block.id, slot=block.slot))
             except (ConnectionClosedError, EOFError) as ex:
                 logger.critical("Reconnect to ogmios ...")
                 try:
@@ -89,8 +91,6 @@ class Crawler(doing.DoDoer):
                     tock = 0.0
                 except Exception as ex:
                     logger.critical(f"Failed to reconnect to ogmios: {ex}")
-
-            self.ledger.states.pin(BACKER_TIP_KEY, PointRecord(id=block.id, slot=block.slot))
 
             yield tock
 
