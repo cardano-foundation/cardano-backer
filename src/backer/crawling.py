@@ -8,6 +8,7 @@ class to support subcribe tip from ogmios and cardano node
 import os
 import ogmios
 import json
+import ogmios.model.model_map as ogmm
 from hio.base import doing
 from keri import help
 from websockets import ConnectionClosedError
@@ -18,7 +19,7 @@ from backer.cardaning import CardanoType, PointRecord, CURRENT_SYNC_POINT
 logger = help.ogler.getLogger()
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
 OGMIOS_PORT = os.environ.get('OGMIOS_PORT', 1337)
-START_SLOT_NUMBER = int(os.environ.get('START_SLOT_NUMBER', 0))
+START_SLOT_NUMBER = int(os.environ.get('START_SLOT_NUMBER') or 0)
 START_BLOCK_HEADER_HASH = os.environ.get('START_BLOCK_HEADER_HASH', "")
 
 class Crawler(doing.DoDoer):
@@ -46,7 +47,7 @@ class Crawler(doing.DoDoer):
             try:
                 direction, tip, block, _ = self.client.next_block.execute()
 
-                if block in [ogmios.Origin()] or (lastBlock and block == lastBlock):
+                if block in [ogmios.Origin()] or block.blocktype == ogmm.Types.ebb.value or (lastBlock and block == lastBlock):
                     continue
 
                 if not self.ledger.onTip:
