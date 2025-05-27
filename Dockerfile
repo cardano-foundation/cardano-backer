@@ -25,6 +25,9 @@ ENTRYPOINT ["keri"]
 
 FROM kli AS cardano-base
 ENV CONFIG_DIR /usr/local/var/keri
+RUN apt update -qq && \
+    apt install -y jq && \
+    apt clean 
 WORKDIR $CONFIG_DIR
 RUN apt update -qq && apt install -y jq && apt clean
 RUN ln -s /src/scripts/start_backer.sh /usr/local/bin/cardano-backer
