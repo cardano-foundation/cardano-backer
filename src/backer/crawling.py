@@ -45,15 +45,15 @@ class Crawler(doing.DoDoer):
 
         while True:
             try:
-                newHeight, _ = self.client.query_block_height.execute()
+                nodeBlockHeight, _ = self.client.query_block_height.execute()
 
-                if isinstance(newHeight, ogmios.datatypes.Origin) or (self.ledger.onTip and newHeight <= self.ledger.tipHeight):
+                if isinstance(nodeBlockHeight, ogmios.datatypes.Origin) or (self.ledger.onTip and nodeBlockHeight == self.ledger.tipHeight):
                     yield tock
                     continue
 
                 direction, tip, block, _ = self.client.next_block.execute()
 
-                if block in [ogmios.Origin()] or isinstance(block, ogmios.Point) or block.blocktype == ogmm.Types.ebb.value or (lastBlock and block == lastBlock):
+                if block in [ogmios.Origin()] or isinstance(block, ogmios.Point) or block.blocktype == ogmm.Types.ebb.value:
                     yield tock
                     continue
 
