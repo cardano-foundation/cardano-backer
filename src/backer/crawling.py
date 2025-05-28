@@ -7,6 +7,7 @@ class to support subcribe tip from ogmios and cardano node
 """
 import os
 import ogmios
+import ogmios.model.model_map as ogmm
 import json
 from hio.base import doing
 from keri import help
@@ -18,7 +19,7 @@ from backer.cardaning import CardanoType, PointRecord, CURRENT_SYNC_POINT
 logger = help.ogler.getLogger()
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
 OGMIOS_PORT = os.environ.get('OGMIOS_PORT', 1337)
-START_SLOT_NUMBER = int(os.environ.get('START_SLOT_NUMBER', 0))
+START_SLOT_NUMBER = int(os.environ.get('START_SLOT_NUMBER') or 0)
 START_BLOCK_HEADER_HASH = os.environ.get('START_BLOCK_HEADER_HASH', "")
 
 class Crawler(doing.DoDoer):
@@ -44,13 +45,17 @@ class Crawler(doing.DoDoer):
 
         while True:
             try:
-                direction, tip, block, _ = self.client.next_block.execute()
+                nodeBlockHeight, _ = self.client.query_block_height.execute()
 
-                if block in [ogmios.Origin()] or (lastBlock and block == lastBlock):
+                if (self.ledger.onTip and nodeBlockHeight == self.ledger.tipHeight):
+                    yield tock
                     continue
 
-                if not self.ledger.onTip:
-                    logger.debug(f"Not reached tip yet. Current Point({block.slot}, {block.id}) with {tip}")
+                direction, tip, block, _ = self.client.next_block.execute()
+
+                if block in [ogmios.Origin()] or isinstance(block, ogmios.Point) or block.blocktype == ogmm.Types.ebb.value:
+                    yield tock
+                    continue
 
                 if direction == ogmios.Direction.forward:
                     if tip.height:
@@ -105,4 +110,3 @@ class Crawler(doing.DoDoer):
                 self.ledger.confirmTrans(CardanoType.SCHEMA)
 
             yield self.tock
-
