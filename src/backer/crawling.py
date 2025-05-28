@@ -47,7 +47,7 @@ class Crawler(doing.DoDoer):
             try:
                 nodeBlockHeight, _ = self.client.query_block_height.execute()
 
-                if isinstance(nodeBlockHeight, ogmios.datatypes.Origin) or (self.ledger.onTip and nodeBlockHeight == self.ledger.tipHeight):
+                if (self.ledger.onTip and nodeBlockHeight == self.ledger.tipHeight):
                     yield tock
                     continue
 
