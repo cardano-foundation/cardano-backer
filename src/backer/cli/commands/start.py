@@ -6,6 +6,7 @@ keri.kli.backer module
 Backer command line interface
 """
 import argparse
+import os
 import logging
 
 from keri import __version__
@@ -41,10 +42,12 @@ parser.add_argument('--alias', '-a', help='human readable alias for the new iden
 parser.add_argument('--passcode', '-p', help='22 character encryption passcode for keystore (is not saved)',
                     dest="bran", default=None)  # passcode => bran
 parser.add_argument('--ledger', '-l', help='Ledger name. Available options: cardano',
-                    required=True, default=None)
+                    required=True, default=None),
+parser.add_argument("--loglevel", action="store", required=False, default=os.getenv("BACKER_LOG_LEVEL", "CRITICAL"),
+                    help="Set log level to DEBUG | INFO | WARNING | ERROR | CRITICAL. Default is CRITICAL")
 
 def launch(args):
-    help.ogler.level = logging.CRITICAL
+    help.ogler.level = logging.getLevelName(args.loglevel)
     help.ogler.reopen(name=args.name, temp=True, clear=True)
 
     logger = help.ogler.getLogger()

@@ -9,6 +9,7 @@ import os
 import ogmios
 import ogmios.model.model_map as ogmm
 import json
+import datetime
 from hio.base import doing
 from keri import help
 from websockets import ConnectionClosedError
@@ -45,9 +46,12 @@ class Crawler(doing.DoDoer):
 
         while True:
             try:
+                # @TODO - focnnor: datetime can be globally set for as a logger prefix
+                logger.debug(f"[{datetime.datetime.now()}] Requesting nodeBlockHeight from ogmios...")
                 nodeBlockHeight, _ = self.client.query_block_height.execute()
+                logger.debug(f"[{datetime.datetime.now()}] Retrieved nodeBlockHeight: {nodeBlockHeight} [current tipHeight: {self.ledger.tipHeight}] [onTip: {self.ledger.onTip}]")
 
-                if (self.ledger.onTip and nodeBlockHeight == self.ledger.tipHeight):
+                if self.ledger.onTip and nodeBlockHeight == self.ledger.tipHeight:
                     yield tock
                     continue
 
@@ -62,13 +66,13 @@ class Crawler(doing.DoDoer):
                         self.ledger.updateTip(tip.height)
 
                     if not self.ledger.onTip and block.height == tip.height:
-                        logger.info(f"Reached tip at slot {block.slot}")
+                        logger.info(f"[{datetime.datetime.now()}] Reached tip at slot {block.slot}")
                         self.ledger.onTip = True
                         tock = 1.0
 
                     # Find transactions involving cardano backer
                     if isinstance(block, ogmios.Block) and hasattr(block, "transactions"):
-                        logger.debug(f"{direction}:\nblock: {block}\ntip:{tip}\n")
+                        logger.debug(f"[{datetime.datetime.now()}] {direction}:\nblock: {block}\ntip:{tip}\n")
 
                         for tx in block.transactions:
                             txId = tx['id']
@@ -82,20 +86,20 @@ class Crawler(doing.DoDoer):
                 else:
                     # Rollback transactions, we receipt a Point instead of a Block in backward direction
                     if isinstance(block, ogmios.Point):
-                        logger.debug(f"{direction}:\nblock: {block}\ntip:{tip}\n")
+                        logger.debug(f"[{datetime.datetime.now()}] {direction}:\nblock: {block}\ntip:{tip}\n")
                         self.ledger.updateTip(tip.height)
                         self.ledger.rollbackBlock(block.slot, type=CardanoType.KEL)
                         self.ledger.rollbackBlock(block.slot, type=CardanoType.SCHEMA)
 
                 self.ledger.states.pin(CURRENT_SYNC_POINT, PointRecord(id=block.id, slot=block.slot))
             except (ConnectionClosedError, EOFError) as ex:
-                logger.critical("Reconnect to ogmios ...")
+                logger.critical(f"[{datetime.datetime.now()}] Reconnect to ogmios ...")
                 try:
                     self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
                     _, _, _ = self.client.find_intersection.execute([tip.to_point()])
                     tock = 0.0
                 except Exception as ex:
-                    logger.critical(f"Failed to reconnect to ogmios: {ex}")
+                    logger.critical(f"[{datetime.datetime.now()}] Failed to reconnect to ogmios: {ex}")
 
             yield tock
 
