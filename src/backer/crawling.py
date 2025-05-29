@@ -45,7 +45,9 @@ class Crawler(doing.DoDoer):
 
         while True:
             try:
+                logger.debug("Requesting nodeBlockHeight from ogmios...")
                 nodeBlockHeight, _ = self.client.query_block_height.execute()
+                logger.debug(f"Retrieved nodeBlockHeight: {nodeBlockHeight}")
 
                 if (self.ledger.onTip and nodeBlockHeight == self.ledger.tipHeight):
                     yield tock
