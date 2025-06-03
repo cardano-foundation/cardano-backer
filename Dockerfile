@@ -11,6 +11,9 @@ RUN apt update -qq && \
 COPY ./ /src
 RUN pip3 install -r requirements.txt
 
+RUN PYTHON_LIB_PATH=$(python3.13 -c "import ogmios.model.cardano_model as m; print(m.__file__)") && \
+    sed -i "/class Era2(Enum):/a \ \ \ \ conway = 'conway'" "$PYTHON_LIB_PATH"
+
 # kli binary image
 FROM base AS kli
 

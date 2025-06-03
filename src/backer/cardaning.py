@@ -19,18 +19,18 @@ from backer.constants import METADATUM_LABEL_KEL, METADATUM_LABEL_SCHEMA
 
 logger = help.ogler.getLogger()
 
-QUEUE_DURATION = os.environ.get('QUEUE_DURATION', 60)
+QUEUE_DURATION = int(os.environ.get('QUEUE_DURATION', 60))
 NETWORK_NAME = os.environ.get('NETWORK') if os.environ.get('NETWORK') else 'preview'
 NETWORK = pycardano.Network.MAINNET if os.environ.get('NETWORK') == 'mainnet' else pycardano.Network.TESTNET
-MINIMUN_BALANCE = os.environ.get('MINIMUN_BALANCE', 5000000)
-TRANSACTION_AMOUNT = os.environ.get('TRANSACTION_AMOUNT', 1000000)
-MIN_BLOCK_CONFIRMATIONS = os.environ.get('MIN_BLOCK_CONFIRMATIONS', 3)
-TRANSACTION_SECURITY_DEPTH = os.environ.get('TRANSACTION_SECURITY_DEPTH', 16)
-TRANSACTION_TIMEOUT_DEPTH = os.environ.get('TRANSACTION_TIMEOUT_DEPTH', 32)
+MINIMUN_BALANCE = int(os.environ.get('MINIMUN_BALANCE', 5000000))
+TRANSACTION_AMOUNT = int(os.environ.get('TRANSACTION_AMOUNT', 1000000))
+MIN_BLOCK_CONFIRMATIONS = int(os.environ.get('MIN_BLOCK_CONFIRMATIONS', 3))
+TRANSACTION_SECURITY_DEPTH = int(os.environ.get('TRANSACTION_SECURITY_DEPTH', 16))
+TRANSACTION_TIMEOUT_DEPTH = int(os.environ.get('TRANSACTION_TIMEOUT_DEPTH', 32))
 MAX_TRANSACTION_SIZE = 16384
 MAX_TRANSACTION_SIZE_MARGIN = 3 # PyCardano and Ogmios serialize the transaction could result in small variations
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
-OGMIOS_PORT = os.environ.get('OGMIOS_PORT', 1337)
+OGMIOS_PORT = int(os.environ.get('OGMIOS_PORT', 1337))
 BACKER_STATE_DB = 'bstt.'
 CURRENT_SYNC_POINT = 'b_syncp'
 
