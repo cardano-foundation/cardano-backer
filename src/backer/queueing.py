@@ -12,7 +12,7 @@ class Queueing(doing.Doer):
     def __init__(self, hab, ledger: Cardano):
         self.hab = hab
         self.ledger = ledger
-        self.tock = os.environ.get('QUEUE_DURATION', 30)  # the job should run daily.
+        self.tock = int(os.environ.get('QUEUE_DURATION', 30))  # the job should run daily.
 
     def recur(self, tyme=None):
         while True:

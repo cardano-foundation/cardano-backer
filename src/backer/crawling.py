@@ -19,14 +19,14 @@ from backer.cardaning import CardanoType, PointRecord, CURRENT_SYNC_POINT
 
 logger = help.ogler.getLogger()
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
-OGMIOS_PORT = os.environ.get('OGMIOS_PORT', 1337)
+OGMIOS_PORT = int(os.environ.get('OGMIOS_PORT', 1337))
 START_SLOT_NUMBER = int(os.environ.get('START_SLOT_NUMBER') or 0)
 START_BLOCK_HEADER_HASH = os.environ.get('START_BLOCK_HEADER_HASH', "")
 
 class Crawler(doing.DoDoer):
 
     def __init__(self, ledger, **kwa):
-        self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
+        self.client = ledger.client
         self.ledger = ledger
         doers = [doing.doify(self.crawlBlockDo), doing.doify(self.confirmTrans)]
         super(Crawler, self).__init__(doers=doers, **kwa)
@@ -45,8 +45,10 @@ class Crawler(doing.DoDoer):
         _, _, _ = self.client.find_intersection.execute([startPoint])
 
         while True:
+            print(f"[{datetime.datetime.now()}] Crawler is running with tock: {self.tock} ...")
             try:
                 # @TODO - focnnor: datetime can be globally set for as a logger prefix
+                print(f"[{datetime.datetime.now()}] Requesting nodeBlockHeight from ogmios...")
                 logger.debug(f"[{datetime.datetime.now()}] Requesting nodeBlockHeight from ogmios...")
                 nodeBlockHeight, _ = self.client.query_block_height.execute()
                 logger.debug(f"[{datetime.datetime.now()}] Retrieved nodeBlockHeight: {nodeBlockHeight} [current tipHeight: {self.ledger.tipHeight}] [onTip: {self.ledger.onTip}]")
@@ -95,7 +97,7 @@ class Crawler(doing.DoDoer):
             except (ConnectionClosedError, EOFError) as ex:
                 logger.critical(f"[{datetime.datetime.now()}] Reconnect to ogmios ...")
                 try:
-                    self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
+                    self.ledger.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
                     _, _, _ = self.client.find_intersection.execute([tip.to_point()])
                     tock = 0.0
                 except Exception as ex:

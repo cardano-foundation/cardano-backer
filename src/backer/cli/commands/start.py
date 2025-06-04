@@ -8,6 +8,8 @@ Backer command line interface
 import argparse
 import os
 import logging
+import threading
+import time
 
 from keri import __version__
 from keri import help
@@ -95,11 +97,33 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
 
     que = queueing.Queueing(hab=hab, ledger=ledger)
     backer = backering.setupBacker(alias=alias,
-                                          hby=hby,
-                                          tcpPort=tcp,
-                                          httpPort=http,
-                                          queue=que)
+                                   hby=hby,
+                                   tcpPort=tcp,
+                                   httpPort=http,
+                                   queue=que)
     crl = crawling.Crawler(ledger=ledger)
-    doers = [hbyDoer, *backer, crl]
 
+    cardanoThread = threading.Event()
+    doer_thread = runSecondaryController([crl, que], cardanoThread)
+
+    # Run the rest of the doers (e.g., KERI doers) in the main thread as before
+    doers = [hbyDoer, *backer]
     directing.runController(doers=doers, expire=expire)
+
+    # When main controller exits, stop the doer thread
+    cardanoThread.set()
+    doer_thread.join()
+
+def runSecondaryController(doers, cardanoThread=None, expire=0.0):
+    """
+    Run all doers (e.g., from Crawler and Queueing) in a dedicated thread using a separate directing.runController.
+    All ogmios requests and queueing will happen in this thread.
+    """
+    def doerController():
+        directing.runController(doers=doers, expire=expire)
+        if cardanoThread:
+            cardanoThread.set()
+
+    thread = threading.Thread(target=doerController, daemon=True)
+    thread.start()
+    return thread

@@ -109,7 +109,7 @@ def setupBacker(hby, queue, alias="backer", mbx=None, tcpPort=5631, httpPort=563
         queries=httpEnd.qrycues)
 
     doers.extend(oobiRes)
-    doers.extend([regDoer, directant, serverDoer, httpServerDoer, rep, witStart, receiptEnd, queue, *oobiery.doers])
+    doers.extend([regDoer, directant, serverDoer, httpServerDoer, rep, witStart, receiptEnd, *oobiery.doers])
 
     return doers
 
