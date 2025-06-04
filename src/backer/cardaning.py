@@ -76,14 +76,15 @@ class Cardano:
         - Optional funding address to fund the backer address
     """
 
-    def __init__(self, hab, ks=None):
+    def __init__(self, hab, keldb_queued, schemadb_queued, ks=None):
         self.onTip = False
         self.pending_kel = []
-        self.keldb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_QUEUED.value)
+
+        self.keldb_queued = keldb_queued
         self.keldb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_PUBLISHED.value)
         self.keldbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_CONFIRMING.value)
 
-        self.schemadb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_QUEUED.value)
+        self.schemadb_queued = schemadb_queued
         self.schemadb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_PUBLISHED.value)
         self.schemadbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_CONFIRMING.value)
 

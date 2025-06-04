@@ -18,18 +18,32 @@ from keri.app import directing, storing, httping, forwarding, oobiing
 from keri import help, kering
 from keri.core import serdering, eventing, parsing, routing, Counter, Codens, scheming
 from keri.core.coring import Ilks
-from keri.db import basing, dbing
+from keri.db import basing, dbing, subing
 from keri.end import ending
 from keri.peer import exchanging
 from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
 
-from backer.cardaning import CardanoType
+from backer.cardaning import CardanoType, CardanoDBName
 
 logger = help.ogler.getLogger()
 
 
-def setupBacker(hby, queue, alias="backer", mbx=None, tcpPort=5631, httpPort=5632):
+def pushToQueuedDb(queuedDb, msg, type, pre=None):
+    """
+    push even to queued
+    """
+    if not queuedDb:
+        return
+    
+    if type is CardanoType.SCHEMA:
+        schemer = scheming.Schemer(raw=msg)
+        queuedDb.pin(keys=(schemer.said, ), val=msg)
+    else:
+        serder = serdering.SerderKERI(raw=msg)
+        queuedDb.pin(keys=(pre, serder.said), val=msg)
+
+def setupBacker(hby, keldb_queued, schemadb_queued, alias="backer", mbx=None, tcpPort=5631, httpPort=5632):
     """
     Setup Registrar Backer controller and doers
 
@@ -76,13 +90,13 @@ def setupBacker(hby, queue, alias="backer", mbx=None, tcpPort=5631, httpPort=563
                             exc=exchanger,
                             rvy=rvy)
 
-    httpEnd = HttpEnd(rxbs=parser.ims, mbx=mbx, hab=hab, queue=queue)
+    httpEnd = HttpEnd(rxbs=parser.ims, mbx=mbx, hab=hab)
     app.add_route("/", httpEnd)
 
-    receiptEnd = ReceiptEnd(hab=hab, queue=queue, inbound=cues)
+    receiptEnd = ReceiptEnd(hab=hab, keldb_queued=keldb_queued, inbound=cues)
     app.add_route("/receipts", receiptEnd)
 
-    schemaEnd = SchemaEnd(hab=hab, queue=queue)
+    schemaEnd = SchemaEnd(hab=hab, schemadb_queued=schemadb_queued)
     app.add_route("/schemas", schemaEnd)
 
     server = http.Server(port=httpPort, app=app)
@@ -246,7 +260,7 @@ class HttpEnd:
     TimeoutQNF = 30
     TimeoutMBX = 5
 
-    def __init__(self, queue, rxbs=None, mbx=None, qrycues=None, hab=None):
+    def __init__(self, rxbs=None, mbx=None, qrycues=None, hab=None):
         """
         Create the KEL HTTP server from the Habitat with an optional Falcon App to
         register the routes with.
@@ -262,7 +276,6 @@ class HttpEnd:
         self.mbx = mbx
         self.qrycues = qrycues if qrycues is not None else decking.Deck()
         self.hab = hab
-        self.queue = queue
 
     def on_post(self, req, rep):
         """
@@ -314,7 +327,7 @@ class HttpEnd:
             if serder.ked["r"] in ("mbx",):
                 rep.set_header('Content-Type', "text/event-stream")
                 rep.status = falcon.HTTP_200
-                rep.stream = QryRpyMailboxIterable(mbx=self.mbx, cues=self.qrycues, said=serder.said, hab=self.hab, queue=self.queue)
+                rep.stream = QryRpyMailboxIterable(mbx=self.mbx, cues=self.qrycues, said=serder.said, hab=self.hab)
             else:
                 rep.set_header('Content-Type', "application/json")
                 rep.status = falcon.HTTP_204
@@ -330,9 +343,9 @@ class ReceiptEnd(doing.DoDoer):
 
      """
 
-    def __init__(self, hab, queue, inbound=None, outbound=None, aids=None):
+    def __init__(self, hab, inbound=None, outbound=None, aids=None, keldb_queued=None):
         self.hab = hab
-        self.queue = queue
+        self.keldb_queued = keldb_queued
         self.inbound = inbound if inbound is not None else decking.Deck()
         self.outbound = outbound if outbound is not None else decking.Deck()
         self.aids = aids
@@ -391,7 +404,7 @@ class ReceiptEnd(doing.DoDoer):
 
             if not existing_said:
                 evt = self.hab.db.cloneEvtMsg(pre=serder.pre, fn=0, dig=serder.said)
-                self.queue.pushToQueued(serder.pre, bytearray(evt))
+                pushToQueuedDb(self.keldb_queued, bytearray(evt) ,CardanoType.KEL ,serder.pre)
 
             rep.set_header('Content-Type', "application/json+cesr")
             rep.status = falcon.HTTP_200
@@ -488,14 +501,13 @@ class ReceiptEnd(doing.DoDoer):
 
 class QryRpyMailboxIterable:
 
-    def __init__(self, cues, mbx, said, queue, retry=5000, hab=None):
+    def __init__(self, cues, mbx, said, retry=5000, hab=None):
         self.mbx = mbx
         self.retry = retry
         self.cues = cues
         self.said = said
         self.iter = None
         self.hab = hab
-        self.queue = queue
 
     def __iter__(self):
         return self
@@ -509,7 +521,7 @@ class QryRpyMailboxIterable:
                     kin = cue["kin"]
                     if kin == "stream":
                         self.iter = iter(MailboxIterable(mbx=self.mbx, pre=cue["pre"], topics=cue["topics"],
-                                                         retry=self.retry, hab=self.hab, queue=self.queue))
+                                                         retry=self.retry, hab=self.hab))
                 else:
                     self.cues.append(cue)
             return b''
@@ -519,13 +531,12 @@ class QryRpyMailboxIterable:
 class MailboxIterable:
     TimeoutMBX = 30000000
 
-    def __init__(self, mbx, pre, topics, queue, retry=5000, hab=None):
+    def __init__(self, mbx, pre, topics, retry=5000, hab=None):
         self.mbx = mbx
         self.pre = pre
         self.topics = topics
         self.retry = retry
         self.hab = hab
-        self.queue = queue
 
     def __iter__(self):
         self.start = self.end = time.perf_counter()
@@ -556,9 +567,9 @@ class MailboxIterable:
 
 
 class SchemaEnd():
-    def __init__(self, hab, queue):
+    def __init__(self, hab, schemadb_queued):
         self.hab = hab
-        self.queue = queue
+        self.schemadb_queued = schemadb_queued
 
     def on_post(self, req: falcon.Request, rep: falcon.Response):
         if req.method == "OPTIONS":
@@ -575,7 +586,7 @@ class SchemaEnd():
 
             if not existing_schemer:
                 self.hab.db.schema.pin(keys=(schemer.said,), val=schemer)
-                self.queue.pushToQueued("", schemer.raw, CardanoType.SCHEMA)
+                pushToQueuedDb(self.schemadb_queued, schemer.raw, CardanoType.SCHEMA)
         except kering.ValidationError as e:
             logger.debug(f"Error parsing schema: {e}")
             raise falcon.HTTPBadRequest(description="Invalid schema")

@@ -22,14 +22,3 @@ class Queueing(doing.Doer):
 
             yield self.tock
 
-    def pushToQueued(self, pre, msg, type=CardanoType.KEL):
-        """
-        push even to queued
-        """
-        if type is CardanoType.SCHEMA:
-            schemer = scheming.Schemer(raw=msg)
-            self.ledger.schemadb_queued.pin(keys=(schemer.said, ), val=msg)
-        else:
-            serder = serdering.SerderKERI(raw=msg)
-            self.ledger.keldb_queued.pin(keys=(pre, serder.said), val=msg)
-
