@@ -38,7 +38,6 @@ class SecondaryThreadMonitorer(doing.Doer):
         while True:
             if self.exceptionContainer:
                 self.logger.critical(f"Restarting secondary controller due to exception: {self.exceptionContainer[-1]}")
-                self.secondaryControllerStop.set()
                 self.doer_thread.join()
                 self.start_secondary()
             yield self.tock
