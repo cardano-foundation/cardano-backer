@@ -14,7 +14,7 @@ class TestReceipt(TestBase):
     def setup_class(cls):
         help.ogler.resetLevel(level=logging.DEBUG, globally=True)
         test_end = TestEnd()
-        cls.hby, cls.hab, cls.client, cls.ledger = test_end.make_test_end("/receipts", backering.ReceiptEnd, cues=decking.Deck())
+        cls.hby, cls.hab, cls.client, cls.ledger = test_end.make_test_end("/receipts", backering.ReceiptEnd, cues=decking.Deck(), type=cardaning.CardanoType.KEL)
 
     def test_invalid_event_format(cls):
         body_data = b'{"v":"KERI10JSON000159_","t":"icp","d":"INVALID","i":"EEqgEGTZpJ0MZ_a97VwepTg4IWR9aGEfwXyV0DfJ8x6s","s":"0","kt":"1","k":["DMK1djRX6XJUr2jsCq9XcjoqwVtQyf4HhnyGf37_NiAs"],"nt":"1","n":["EJtfLdgPkiaNohGO6oRRaKEBq66HPV8KFOldSGJC4UYx"],"bt":"1","b":["BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha"],"c":[],"a":[]}'

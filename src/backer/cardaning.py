@@ -174,9 +174,9 @@ class Cardano:
         return []
 
     def publishEvents(self, type:CardanoType):
-        kelNumber = self.hab.db.cnt(self.keldb_queued.sdb)
+        eventNumber = self.hab.db.cnt(self.keldb_queued.sdb) if type == CardanoType.KEL else self.hab.db.cnt(self.schemadb_queued.sdb)
 
-        if kelNumber < 1:
+        if eventNumber < 1:
             return
 
         keri_data = bytearray()

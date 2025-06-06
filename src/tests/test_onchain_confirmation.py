@@ -8,6 +8,7 @@ import time
 import json
 from keri import help
 from keri.app import habbing
+from keri.db import subing
 from keri.core import eventing, serdering, Salter, scheming
 from backer import cardaning, queueing
 from tests.helper import TestBase
@@ -43,10 +44,11 @@ class TestUtxos(TestBase):
 
             serder = serdering.SerderKERI(sad=icp, kind=eventing.Kinds.json)
             msg = serder.raw
-            ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+            keldb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.KEL_QUEUED.value)    
+            schemadb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.SCHEMA_QUEUED.value)
+            ledger = cardaning.Cardano(hab=hab, ks=hab.ks, keldb_queued=keldb_queued, schemadb_queued=schemadb_queued)
             ledger.keldb_queued.trim()
-            queue = queueing.Queueing(hab=hab, ledger=ledger)
-            queue.pushToQueued(serder.pre, msg)
+            ledger.keldb_queued.pin(keys=(serder.pre, serder.said), val=msg)
             cardaning.TRANSACTION_SECURITY_DEPTH = TRANSACTION_SECURITY_DEPTH
             cardaning.TRANSACTION_TIMEOUT_DEPTH = TRANSACTION_TIMEOUT_DEPTH
 
@@ -171,12 +173,17 @@ class TestUtxos(TestBase):
                 }
             }
 
+            keldb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.KEL_QUEUED.value)    
+            schemadb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.SCHEMA_QUEUED.value)
+
             schemer = scheming.Schemer(raw=json.dumps(schema).encode('utf-8'))
             msg = schemer.raw
-            ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+            
+            ledger = cardaning.Cardano(hab=hab, ks=hab.ks, keldb_queued=keldb_queued, schemadb_queued=schemadb_queued)
             ledger.keldb_queued.trim()
-            queue = queueing.Queueing(hab=hab, ledger=ledger)
-            queue.pushToQueued("", msg, cardaning.CardanoType.SCHEMA)
+            ledger.schemadb_queued.trim()
+            ledger.schemadb_queued.pin(keys=(schemer.said, ), val=msg)
+
             cardaning.TRANSACTION_SECURITY_DEPTH = TRANSACTION_SECURITY_DEPTH
             cardaning.TRANSACTION_TIMEOUT_DEPTH = TRANSACTION_TIMEOUT_DEPTH
 

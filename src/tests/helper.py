@@ -5,6 +5,7 @@ import shutil
 import socket
 import falcon
 
+from keri.db import subing
 from pathlib import Path
 from falcon.testing import TestClient
 from keri import help
@@ -56,7 +57,7 @@ def set_test_env():
     os.environ["WALLET_ADDRESS_CBORHEX"] = WALLET_ADDRESS_CBORHEX
 
 class TestEnd:
-    def make_test_end(self, route, endclass, cues=None):
+    def make_test_end(self, route, endclass, cues=None, type=cardaning.CardanoType.KEL):
         set_test_env()
         name = "testbacker"
         bran = ""
@@ -76,16 +77,18 @@ class TestEnd:
         if hab is None:
             hab = hby.makeHab(name=alias, transferable=False)
 
-        ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
-        queue = queueing.Queueing(hab=hab, ledger=ledger)
+
+        keldb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.KEL_QUEUED.value)    
+        schemadb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.SCHEMA_QUEUED.value)
+        ledger = cardaning.Cardano(hab=hab, ks=hab.ks, keldb_queued=keldb_queued, schemadb_queued=schemadb_queued)
 
         app = falcon.App()
         client = TestClient(app)
 
         if cues:
-            endResource = endclass(hab=hab, queue=queue, cues=cues)
+            endResource = endclass(hab=hab, keldb_queued=keldb_queued, cues=cues) if type == cardaning.CardanoType.KEL else endclass(hab=hab, schemadb_queued=schemadb_queued, cues=cues)
         else:
-            endResource = endclass(hab=hab, queue=queue)
+            endResource = endclass(hab=hab, keldb_queued=keldb_queued) if type == cardaning.CardanoType.KEL else endclass(hab=hab, schemadb_queued=schemadb_queued)
 
         app.add_route(route, endResource)
 

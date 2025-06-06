@@ -2,6 +2,7 @@ import time
 import logging
 from keri import help
 from keri.core import scheming
+from keri.db import subing
 from hio.help import Hict
 from backer import cardaning, backering
 from tests.helper import TestEnd, TestBase
@@ -12,7 +13,7 @@ class TestSchema(TestBase):
     def setup_class(cls):
         help.ogler.resetLevel(level=logging.DEBUG, globally=True)
         test_end = TestEnd()
-        cls.hby, cls.hab, cls.client, cls.ledger = test_end.make_test_end(SCHEMA_ROUTE, backering.SchemaEnd)
+        cls.hby, cls.hab, cls.client, cls.ledger = test_end.make_test_end(SCHEMA_ROUTE, backering.SchemaEnd, type=cardaning.CardanoType.SCHEMA)
 
     def test_invalid_schema_format(cls):
         schema = (b'{"$id":"EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdccza","$schema":"http://json'
@@ -50,7 +51,9 @@ class TestSchema(TestBase):
         assert res.status_code == 204
 
         if res.status_code == 204:
-                ledger = cardaning.Cardano(hab=cls.hab, ks=cls.hab.ks)
+                keldb_queued = subing.Suber(db=cls.hab.db, subkey=cardaning.CardanoDBName.KEL_QUEUED.value)    
+                schemadb_queued = subing.Suber(db=cls.hab.db, subkey=cardaning.CardanoDBName.SCHEMA_QUEUED.value)
+                ledger = cardaning.Cardano(hab=cls.hab, ks=cls.hab.ks, keldb_queued=keldb_queued, schemadb_queued=schemadb_queued)
                 schemer = scheming.Schemer(raw=schema)
                 queued_event = ledger.schemadb_queued.get((schemer.said, ))
                 queued_schemer = scheming.Schemer(raw=queued_event.encode('utf-8'))
