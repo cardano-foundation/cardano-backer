@@ -8,14 +8,17 @@ Backer command line interface
 import argparse
 import os
 import logging
+import threading
 
 from keri import __version__
 from keri import help
 from keri.app import directing, habbing, keeping
+from keri.db import subing
 from backer import backering, queueing
 from backer import cardaning
 from backer import crawling
 from keri.app.cli.common import existing
+from backer.monitoring import SecondaryThreadMonitorer
 
 d = "Runs KERI backer controller"
 parser = argparse.ArgumentParser(description=d)
@@ -41,8 +44,6 @@ parser.add_argument('--base', '-b', help='additional optional prefix to file loc
 parser.add_argument('--alias', '-a', help='human readable alias for the new identifier prefix', required=True)
 parser.add_argument('--passcode', '-p', help='22 character encryption passcode for keystore (is not saved)',
                     dest="bran", default=None)  # passcode => bran
-parser.add_argument('--ledger', '-l', help='Ledger name. Available options: cardano',
-                    required=True, default=None),
 parser.add_argument("--loglevel", action="store", required=False, default=os.getenv("BACKER_LOG_LEVEL", "CRITICAL"),
                     help="Set log level to DEBUG | INFO | WARNING | ERROR | CRITICAL. Default is CRITICAL")
 
@@ -51,7 +52,6 @@ def launch(args):
     help.ogler.reopen(name=args.name, temp=True, clear=True)
 
     logger = help.ogler.getLogger()
-
 
     logger.info("\n******* Starting Backer for %s listening: http/%s, tcp/%s "
                 ".******\n\n", args.name, args.http, args.tcp)
@@ -62,13 +62,13 @@ def launch(args):
                bran=args.bran,
                tcp=int(args.tcp),
                http=int(args.http),
-               ledger=args.ledger)
+               logger=logger)
 
     logger.info("\n******* Ended Backer for %s listening: http/%s, tcp/%s"
                 ".******\n\n", args.name, args.http, args.tcp)
 
 
-def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=5666, expire=0.0, ledger=None):
+def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=5666, expire=0.0, logger=help.ogler.getLogger()):
     """
     Setup and run one backer
     """
@@ -91,15 +91,30 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
     if hab is None:
         hab = hby.makeHab(name=alias, transferable=False)
 
-    ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+    keldb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.KEL_QUEUED.value)    
+    schemadb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.SCHEMA_QUEUED.value)
 
-    que = queueing.Queueing(hab=hab, ledger=ledger)
+    ledger = cardaning.Cardano(hab=hab, ks=hab.ks, keldb_queued=keldb_queued, schemadb_queued=schemadb_queued)
+
+    queuer = queueing.Queueing(hab=hab, ledger=ledger)
     backer = backering.setupBacker(alias=alias,
-                                          hby=hby,
-                                          tcpPort=tcp,
-                                          httpPort=http,
-                                          queue=que)
+                                   hby=hby,
+                                   tcpPort=tcp,
+                                   httpPort=http,
+                                   keldb_queued=keldb_queued,
+                                   schemadb_queued=schemadb_queued)
     crl = crawling.Crawler(ledger=ledger)
-    doers = [hbyDoer, *backer, crl]
 
+    secondaryControllerStop = threading.Event()
+
+    # Add the monitor doer to main doers
+    monitor_doer = SecondaryThreadMonitorer(
+        crl=crl,
+        queuer=queuer,
+        secondaryControllerStop=secondaryControllerStop,
+        logger=logger
+    )
+
+    doers = [hbyDoer, *backer, monitor_doer]
     directing.runController(doers=doers, expire=expire)
+    monitor_doer.close()

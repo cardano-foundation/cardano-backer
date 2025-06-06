@@ -6,27 +6,29 @@ backer.crawling module
 class to support subcribe tip from ogmios and cardano node
 """
 import os
+import time
 import ogmios
 import ogmios.model.model_map as ogmm
 import json
 import datetime
 from hio.base import doing
 from keri import help
+import pycardano
 from websockets import ConnectionClosedError
 
-from backer.cardaning import CardanoType, PointRecord, CURRENT_SYNC_POINT
+from backer.cardaning import NETWORK, CardanoType, PointRecord, CURRENT_SYNC_POINT
 
 
 logger = help.ogler.getLogger()
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
-OGMIOS_PORT = os.environ.get('OGMIOS_PORT', 1337)
+OGMIOS_PORT = int(os.environ.get('OGMIOS_PORT', 1337))
 START_SLOT_NUMBER = int(os.environ.get('START_SLOT_NUMBER') or 0)
 START_BLOCK_HEADER_HASH = os.environ.get('START_BLOCK_HEADER_HASH', "")
 
 class Crawler(doing.DoDoer):
 
     def __init__(self, ledger, **kwa):
-        self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
+        self.client = ledger.client
         self.ledger = ledger
         doers = [doing.doify(self.crawlBlockDo), doing.doify(self.confirmTrans)]
         super(Crawler, self).__init__(doers=doers, **kwa)
@@ -52,6 +54,7 @@ class Crawler(doing.DoDoer):
                 logger.debug(f"[{datetime.datetime.now()}] Retrieved nodeBlockHeight: {nodeBlockHeight} [current tipHeight: {self.ledger.tipHeight}] [onTip: {self.ledger.onTip}]")
 
                 if self.ledger.onTip and nodeBlockHeight == self.ledger.tipHeight:
+                    tock = 1.0
                     yield tock
                     continue
 
@@ -94,14 +97,26 @@ class Crawler(doing.DoDoer):
                 self.ledger.states.pin(CURRENT_SYNC_POINT, PointRecord(id=block.id, slot=block.slot))
             except (ConnectionClosedError, EOFError) as ex:
                 logger.critical(f"[{datetime.datetime.now()}] Reconnect to ogmios ...")
-                try:
-                    self.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
-                    _, _, _ = self.client.find_intersection.execute([tip.to_point()])
-                    tock = 0.0
-                except Exception as ex:
-                    logger.critical(f"[{datetime.datetime.now()}] Failed to reconnect to ogmios: {ex}")
+                raise ex
 
             yield tock
+    
+    def reconnectOgmios(self):
+        # Try to close previous client if possible
+        try:
+            if hasattr(self.ledger.client, "close"):
+                self.ledger.client.close()
+        except Exception as close_ex:
+            logger.warning(f"Error closing previous ogmios client: {close_ex}")
+
+        time.sleep(1)  # Give the server a moment to clean up
+
+        self.ledger.context = pycardano.OgmiosV6ChainContext(
+            host=OGMIOS_HOST,
+            port=OGMIOS_PORT,
+            network=NETWORK
+        )
+        self.client = self.ledger.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
 
     def confirmTrans(self, tymth=None, tock=0.0):
         self.wind(tymth)

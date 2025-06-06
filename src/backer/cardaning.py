@@ -19,18 +19,18 @@ from backer.constants import METADATUM_LABEL_KEL, METADATUM_LABEL_SCHEMA
 
 logger = help.ogler.getLogger()
 
-QUEUE_DURATION = os.environ.get('QUEUE_DURATION', 60)
+QUEUE_DURATION = int(os.environ.get('QUEUE_DURATION', 60))
 NETWORK_NAME = os.environ.get('NETWORK') if os.environ.get('NETWORK') else 'preview'
 NETWORK = pycardano.Network.MAINNET if os.environ.get('NETWORK') == 'mainnet' else pycardano.Network.TESTNET
-MINIMUN_BALANCE = os.environ.get('MINIMUN_BALANCE', 5000000)
-TRANSACTION_AMOUNT = os.environ.get('TRANSACTION_AMOUNT', 1000000)
-MIN_BLOCK_CONFIRMATIONS = os.environ.get('MIN_BLOCK_CONFIRMATIONS', 3)
-TRANSACTION_SECURITY_DEPTH = os.environ.get('TRANSACTION_SECURITY_DEPTH', 16)
-TRANSACTION_TIMEOUT_DEPTH = os.environ.get('TRANSACTION_TIMEOUT_DEPTH', 32)
+MINIMUN_BALANCE = int(os.environ.get('MINIMUN_BALANCE', 5000000))
+TRANSACTION_AMOUNT = int(os.environ.get('TRANSACTION_AMOUNT', 1000000))
+MIN_BLOCK_CONFIRMATIONS = int(os.environ.get('MIN_BLOCK_CONFIRMATIONS', 3))
+TRANSACTION_SECURITY_DEPTH = int(os.environ.get('TRANSACTION_SECURITY_DEPTH', 16))
+TRANSACTION_TIMEOUT_DEPTH = int(os.environ.get('TRANSACTION_TIMEOUT_DEPTH', 32))
 MAX_TRANSACTION_SIZE = 16384
 MAX_TRANSACTION_SIZE_MARGIN = 3 # PyCardano and Ogmios serialize the transaction could result in small variations
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
-OGMIOS_PORT = os.environ.get('OGMIOS_PORT', 1337)
+OGMIOS_PORT = int(os.environ.get('OGMIOS_PORT', 1337))
 BACKER_STATE_DB = 'bstt.'
 CURRENT_SYNC_POINT = 'b_syncp'
 
@@ -76,14 +76,16 @@ class Cardano:
         - Optional funding address to fund the backer address
     """
 
-    def __init__(self, hab, ks=None):
+    def __init__(self, hab, keldb_queued, schemadb_queued, ks=None):
+        self.hab = hab
         self.onTip = False
         self.pending_kel = []
-        self.keldb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_QUEUED.value)
+
+        self.keldb_queued = keldb_queued
         self.keldb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_PUBLISHED.value)
         self.keldbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_CONFIRMING.value)
 
-        self.schemadb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_QUEUED.value)
+        self.schemadb_queued = schemadb_queued
         self.schemadb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_PUBLISHED.value)
         self.schemadbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_CONFIRMING.value)
 
@@ -172,6 +174,11 @@ class Cardano:
         return []
 
     def publishEvents(self, type:CardanoType):
+        eventNumber = self.hab.db.cnt(self.keldb_queued.sdb) if type == CardanoType.KEL else self.hab.db.cnt(self.schemadb_queued.sdb)
+
+        if eventNumber < 1:
+            return
+
         keri_data = bytearray()
         submitting_items = []
         submitting_tx_cbor = None
