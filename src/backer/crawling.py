@@ -6,17 +6,14 @@ backer.crawling module
 class to support subcribe tip from ogmios and cardano node
 """
 import os
-import time
 import ogmios
 import ogmios.model.model_map as ogmm
 import json
 import datetime
 from hio.base import doing
 from keri import help
-import pycardano
-from websockets import ConnectionClosedError
 
-from backer.cardaning import NETWORK, CardanoType, PointRecord, CURRENT_SYNC_POINT
+from backer.cardaning import CardanoType, PointRecord, CURRENT_SYNC_POINT
 
 
 logger = help.ogler.getLogger()
@@ -25,10 +22,10 @@ OGMIOS_PORT = int(os.environ.get('OGMIOS_PORT', 1337))
 START_SLOT_NUMBER = int(os.environ.get('START_SLOT_NUMBER') or 0)
 START_BLOCK_HEADER_HASH = os.environ.get('START_BLOCK_HEADER_HASH', "")
 
+
 class Crawler(doing.DoDoer):
 
     def __init__(self, ledger, **kwa):
-        self.client = ledger.client
         self.ledger = ledger
         doers = [doing.doify(self.crawlBlockDo), doing.doify(self.confirmTrans)]
         super(Crawler, self).__init__(doers=doers, **kwa)
@@ -44,79 +41,58 @@ class Crawler(doing.DoDoer):
         if lastBlock:
             startPoint = ogmios.Point(lastBlock.slot, lastBlock.id)
 
-        _, _, _ = self.client.find_intersection.execute([startPoint])
+        _, _, _ = self.ledger.client.find_intersection.execute([startPoint])
 
         while True:
-            try:
-                # @TODO - focnnor: datetime can be globally set for as a logger prefix
-                logger.debug(f"[{datetime.datetime.now()}] Requesting nodeBlockHeight from ogmios...")
-                nodeBlockHeight, _ = self.client.query_block_height.execute()
-                logger.debug(f"[{datetime.datetime.now()}] Retrieved nodeBlockHeight: {nodeBlockHeight} [current tipHeight: {self.ledger.tipHeight}] [onTip: {self.ledger.onTip}]")
+            # @TODO - focnnor: datetime can be globally set for as a logger prefix
+            logger.debug(f"[{datetime.datetime.now()}] Requesting nodeBlockHeight from ogmios...")
+            nodeBlockHeight, _ = self.ledger.client.query_block_height.execute()
+            logger.debug(f"[{datetime.datetime.now()}] Retrieved nodeBlockHeight: {nodeBlockHeight} [current tipHeight: {self.ledger.tipHeight}] [onTip: {self.ledger.onTip}]")
 
-                if self.ledger.onTip and nodeBlockHeight == self.ledger.tipHeight:
+            if self.ledger.onTip and nodeBlockHeight == self.ledger.tipHeight:
+                self.tock = 1.0
+                yield self.tock
+                continue
+
+            direction, tip, block, _ = self.ledger.client.next_block.execute()
+
+            if block in [ogmios.Origin()] or isinstance(block, ogmios.Point) or block.blocktype == ogmm.Types.ebb.value:
+                yield self.tock
+                continue
+
+            if direction == ogmios.Direction.forward:
+                if tip.height:
+                    self.ledger.updateTip(tip.height)
+
+                if not self.ledger.onTip and block.height == tip.height:
+                    logger.info(f"[{datetime.datetime.now()}] Reached tip at slot {block.slot}")
+                    self.ledger.onTip = True
                     tock = 1.0
-                    yield tock
-                    continue
 
-                direction, tip, block, _ = self.client.next_block.execute()
+                # Find transactions involving cardano backer
+                if isinstance(block, ogmios.Block) and hasattr(block, "transactions"):
+                    logger.debug(f"[{datetime.datetime.now()}] {direction}:\nblock: {block}\ntip:{tip}\n")
 
-                if block in [ogmios.Origin()] or isinstance(block, ogmios.Point) or block.blocktype == ogmm.Types.ebb.value:
-                    yield tock
-                    continue
+                    for tx in block.transactions:
+                        txId = tx['id']
+                        confirmingTrans = self.ledger.getConfirmingTrans(txId)
+                        if confirmingTrans is not None:
+                            trans = json.loads(confirmingTrans)
+                            trans["block_slot"] = block.slot
+                            trans["block_height"] = block.height
+                            item_type = CardanoType(trans["type"])
+                            self.ledger.updateTrans(trans, item_type)
+            else:
+                # Rollback transactions, we receipt a Point instead of a Block in backward direction
+                if isinstance(block, ogmios.Point):
+                    logger.debug(f"[{datetime.datetime.now()}] {direction}:\nblock: {block}\ntip:{tip}\n")
+                    self.ledger.updateTip(tip.height)
+                    self.ledger.rollbackBlock(block.slot, type=CardanoType.KEL)
+                    self.ledger.rollbackBlock(block.slot, type=CardanoType.SCHEMA)
 
-                if direction == ogmios.Direction.forward:
-                    if tip.height:
-                        self.ledger.updateTip(tip.height)
+            self.ledger.states.pin(CURRENT_SYNC_POINT, PointRecord(id=block.id, slot=block.slot))
 
-                    if not self.ledger.onTip and block.height == tip.height:
-                        logger.info(f"[{datetime.datetime.now()}] Reached tip at slot {block.slot}")
-                        self.ledger.onTip = True
-                        tock = 1.0
-
-                    # Find transactions involving cardano backer
-                    if isinstance(block, ogmios.Block) and hasattr(block, "transactions"):
-                        logger.debug(f"[{datetime.datetime.now()}] {direction}:\nblock: {block}\ntip:{tip}\n")
-
-                        for tx in block.transactions:
-                            txId = tx['id']
-                            confirmingTrans = self.ledger.getConfirmingTrans(txId)
-                            if confirmingTrans is not None:
-                                trans = json.loads(confirmingTrans)
-                                trans["block_slot"] = block.slot
-                                trans["block_height"] = block.height
-                                item_type = CardanoType(trans["type"])
-                                self.ledger.updateTrans(trans, item_type)
-                else:
-                    # Rollback transactions, we receipt a Point instead of a Block in backward direction
-                    if isinstance(block, ogmios.Point):
-                        logger.debug(f"[{datetime.datetime.now()}] {direction}:\nblock: {block}\ntip:{tip}\n")
-                        self.ledger.updateTip(tip.height)
-                        self.ledger.rollbackBlock(block.slot, type=CardanoType.KEL)
-                        self.ledger.rollbackBlock(block.slot, type=CardanoType.SCHEMA)
-
-                self.ledger.states.pin(CURRENT_SYNC_POINT, PointRecord(id=block.id, slot=block.slot))
-            except (ConnectionClosedError, EOFError) as ex:
-                logger.critical(f"[{datetime.datetime.now()}] Reconnect to ogmios ...")
-                raise ex
-
-            yield tock
-    
-    def reconnectOgmios(self):
-        # Try to close previous client if possible
-        try:
-            if hasattr(self.ledger.client, "close"):
-                self.ledger.client.close()
-        except Exception as close_ex:
-            logger.warning(f"Error closing previous ogmios client: {close_ex}")
-
-        time.sleep(1)  # Give the server a moment to clean up
-
-        self.ledger.context = pycardano.OgmiosV6ChainContext(
-            host=OGMIOS_HOST,
-            port=OGMIOS_PORT,
-            network=NETWORK
-        )
-        self.client = self.ledger.client = ogmios.Client(host=OGMIOS_HOST, port=OGMIOS_PORT)
+            yield self.tock
 
     def confirmTrans(self, tymth=None, tock=0.0):
         self.wind(tymth)

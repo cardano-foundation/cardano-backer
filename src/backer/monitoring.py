@@ -1,69 +1,52 @@
 import threading
+import os
 from keri import help
 from keri.app import directing
 from hio.base import doing
+from ogmios.client import Client
+from backer import cardaning, queueing, crawling
+
+logger = help.ogler.getLogger()
+
+OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
+OGMIOS_PORT = int(os.environ.get('OGMIOS_PORT', 1337))
 
 
-class SecondaryThreadMonitorer(doing.Doer):
+class CardanoThreadMonitor(doing.Doer):
     """
     Doer that monitors the shared exception variable and restarts the secondary thread if needed.
     """
-    def __init__(self, crl, queuer, secondaryControllerStop, exceptionContainer, logger):
-        self.crl = crl
-        self.queuer = queuer
-        self.secondaryControllerStop = secondaryControllerStop
-        self.exceptionContainer = exceptionContainer
-        self.logger = logger
-        self.doer_thread = None
-        self.tock = 1.0
+    def __init__(self, hab):
+        self.hab = hab
+        self.thread = None
+        self.tock = 5.0
         super().__init__(tock=self.tock)
 
-    def start_secondary(self):
-        restart = True if self.exceptionContainer else False
-        self.secondaryControllerStop.clear()
-        self.exceptionContainer.clear()
-        self.doer_thread = self.runSecondaryController(
-            [self.crl, self.queuer],
-            self.secondaryControllerStop,
-            self.logger,
-            self.exceptionContainer,
-            restart=restart
-        )
+    def enter(self):
+        self._startThread()
 
     def recur(self, tyme=None):
-        # Start the secondary thread on first run
-        if self.doer_thread is None:
-            self.start_secondary()
-
         while True:
-            if self.exceptionContainer:
-                self.logger.critical(f"Restarting secondary controller due to exception: {self.exceptionContainer[-1]}")
-                self.doer_thread.join()
-                self.start_secondary()
+            if not self.thread.is_alive():
+                logger.critical(f"Restarting Cardano thread after error.")
+                self._startThread()
             yield self.tock
 
-    def close(self):
-        if self.doer_thread:
-            self.secondaryControllerStop.set()
-            self.doer_thread.join()
+    def exit(self):
+        if self.thread:
+            self.thread.join()
 
-    def runSecondaryController(self, doers, secondaryControllerStop, logger=help.ogler.getLogger(), exceptionContainer=None, restart=False):
-        """
-        Run all doers (e.g., from Crawler and Queueing) in a dedicated thread using a separate directing.runController.
-        All ogmios requests and queueing will happen in this thread.
-        """
-        def doerController():
+    def _startThread(self):
+        def doCardano():
             try:
-                if restart:
-                    self.crl.reconnectOgmios()
+                with Client(OGMIOS_HOST, OGMIOS_PORT) as client:
+                    ledger = cardaning.Cardano(hab=self.hab, client=client)
+                    queuer = queueing.Queuer(ledger=ledger)
+                    crawler = crawling.Crawler(ledger=ledger)
 
-                directing.runController(doers=doers, expire=0.0)
+                    directing.runController(doers=[crawler, queuer], expire=0.0)
             except Exception as ex:
                 logger.critical(f"Secondary controller encountered an error: {ex}")
-                exceptionContainer.append(ex)
-            finally:
-                secondaryControllerStop.set()
 
-        thread = threading.Thread(target=doerController, daemon=True)
-        thread.start()
-        return thread
+        self.thread = threading.Thread(target=doCardano, daemon=True)
+        self.thread.start()
