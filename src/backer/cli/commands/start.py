@@ -9,7 +9,6 @@ import argparse
 import os
 import logging
 import threading
-import time
 
 from keri import __version__
 from keri import help
@@ -19,6 +18,7 @@ from backer import backering, queueing
 from backer import cardaning
 from backer import crawling
 from keri.app.cli.common import existing
+from backer.monitoring import SecondaryThreadMonitorer
 
 d = "Runs KERI backer controller"
 parser = argparse.ArgumentParser(description=d)
@@ -52,7 +52,6 @@ def launch(args):
     help.ogler.reopen(name=args.name, temp=True, clear=True)
 
     logger = help.ogler.getLogger()
-
 
     logger.info("\n******* Starting Backer for %s listening: http/%s, tcp/%s "
                 ".******\n\n", args.name, args.http, args.tcp)
@@ -98,7 +97,6 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
     ledger = cardaning.Cardano(hab=hab, ks=hab.ks, keldb_queued=keldb_queued, schemadb_queued=schemadb_queued)
 
     queuer = queueing.Queueing(hab=hab, ledger=ledger)
-
     backer = backering.setupBacker(alias=alias,
                                    hby=hby,
                                    tcpPort=tcp,
@@ -108,30 +106,17 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
     crl = crawling.Crawler(ledger=ledger)
 
     secondaryControllerStop = threading.Event()
-    doer_thread = runSecondaryController([crl, queuer], secondaryControllerStop, expire, logger)
+    exceptionContainer = []
 
-    # Run the rest of the doers (e.g., KERI doers) in the main thread as before
-    doers = [hbyDoer, *backer]
+    # Add the monitor doer to main doers
+    monitor_doer = SecondaryThreadMonitorer(
+        crl=crl,
+        queuer=queuer,
+        secondaryControllerStop=secondaryControllerStop,
+        exceptionContainer=exceptionContainer,
+        logger=logger
+    )
+
+    doers = [hbyDoer, *backer, monitor_doer]
     directing.runController(doers=doers, expire=expire)
-
-    # When main controller exits, stop the doer thread
-    secondaryControllerStop.set()
-    doer_thread.join()
-
-def runSecondaryController(doers, secondaryControllerStop=None, expire=0.0, logger=help.ogler.getLogger()):
-    """
-    Run all doers (e.g., from Crawler and Queueing) in a dedicated thread using a separate directing.runController.
-    All ogmios requests and queueing will happen in this thread.
-    """
-    def doerController():
-        try:
-            directing.runController(doers=doers, expire=expire)
-        except Exception as ex:
-            logger.critical(f"Secondary controller encountered an error: {ex}")
-        finally:
-            if secondaryControllerStop:
-                secondaryControllerStop.set()
-
-    thread = threading.Thread(target=doerController, daemon=True)
-    thread.start()
-    return thread
+    monitor_doer.close()

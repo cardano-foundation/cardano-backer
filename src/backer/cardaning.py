@@ -77,6 +77,7 @@ class Cardano:
     """
 
     def __init__(self, hab, keldb_queued, schemadb_queued, ks=None):
+        self.hab = hab
         self.onTip = False
         self.pending_kel = []
 
@@ -173,6 +174,11 @@ class Cardano:
         return []
 
     def publishEvents(self, type:CardanoType):
+        kelNumber = self.hab.db.cnt(self.keldb_queued.sdb)
+
+        if kelNumber < 1:
+            return
+
         keri_data = bytearray()
         submitting_items = []
         submitting_tx_cbor = None

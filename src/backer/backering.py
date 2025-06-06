@@ -18,30 +18,14 @@ from keri.app import directing, storing, httping, forwarding, oobiing
 from keri import help, kering
 from keri.core import serdering, eventing, parsing, routing, Counter, Codens, scheming
 from keri.core.coring import Ilks
-from keri.db import basing, dbing, subing
+from keri.db import basing, dbing
 from keri.end import ending
 from keri.peer import exchanging
 from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
 
-from backer.cardaning import CardanoType, CardanoDBName
-
 logger = help.ogler.getLogger()
 
-
-def pushToQueuedDb(queuedDb, msg, type, pre=None):
-    """
-    push even to queued
-    """
-    if not queuedDb:
-        return
-    
-    if type is CardanoType.SCHEMA:
-        schemer = scheming.Schemer(raw=msg)
-        queuedDb.pin(keys=(schemer.said, ), val=msg)
-    else:
-        serder = serdering.SerderKERI(raw=msg)
-        queuedDb.pin(keys=(pre, serder.said), val=msg)
 
 def setupBacker(hby, keldb_queued, schemadb_queued, alias="backer", mbx=None, tcpPort=5631, httpPort=5632):
     """
@@ -343,7 +327,7 @@ class ReceiptEnd(doing.DoDoer):
 
      """
 
-    def __init__(self, hab, inbound=None, outbound=None, aids=None, keldb_queued=None):
+    def __init__(self, hab, keldb_queued, inbound=None, outbound=None, aids=None):
         self.hab = hab
         self.keldb_queued = keldb_queued
         self.inbound = inbound if inbound is not None else decking.Deck()
@@ -404,7 +388,7 @@ class ReceiptEnd(doing.DoDoer):
 
             if not existing_said:
                 evt = self.hab.db.cloneEvtMsg(pre=serder.pre, fn=0, dig=serder.said)
-                pushToQueuedDb(self.keldb_queued, bytearray(evt) ,CardanoType.KEL ,serder.pre)
+                self.keldb_queued.pin(keys=(pre, serder.said), val=bytearray(evt))
 
             rep.set_header('Content-Type', "application/json+cesr")
             rep.status = falcon.HTTP_200
@@ -586,7 +570,7 @@ class SchemaEnd():
 
             if not existing_schemer:
                 self.hab.db.schema.pin(keys=(schemer.said,), val=schemer)
-                pushToQueuedDb(self.schemadb_queued, schemer.raw, CardanoType.SCHEMA)
+                self.schemadb_queued.pin(keys=(schemer.said, ), val=schemer.raw)
         except kering.ValidationError as e:
             logger.debug(f"Error parsing schema: {e}")
             raise falcon.HTTPBadRequest(description="Invalid schema")
