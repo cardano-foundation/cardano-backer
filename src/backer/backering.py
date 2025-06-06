@@ -14,6 +14,7 @@ from hio.base import doing
 from hio.core import http
 from hio.core.tcp import serving
 from hio.help import decking
+from keri.db import subing
 from keri.app import directing, storing, httping, forwarding, oobiing
 from keri import help, kering
 from keri.core import serdering, eventing, parsing, routing, Counter, Codens, scheming
@@ -23,11 +24,12 @@ from keri.end import ending
 from keri.peer import exchanging
 from keri.vdr import verifying, viring
 from keri.vdr.eventing import Tevery
+from backer import cardaning
 
 logger = help.ogler.getLogger()
 
 
-def setupBacker(hby, keldb_queued, schemadb_queued, alias="backer", mbx=None, tcpPort=5631, httpPort=5632):
+def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632):
     """
     Setup Registrar Backer controller and doers
 
@@ -77,6 +79,9 @@ def setupBacker(hby, keldb_queued, schemadb_queued, alias="backer", mbx=None, tc
     httpEnd = HttpEnd(rxbs=parser.ims, mbx=mbx, hab=hab)
     app.add_route("/", httpEnd)
 
+    keldb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.KEL_QUEUED.value)
+    schemadb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.SCHEMA_QUEUED.value)
+
     receiptEnd = ReceiptEnd(hab=hab, keldb_queued=keldb_queued, inbound=cues)
     app.add_route("/receipts", receiptEnd)
 
@@ -110,6 +115,7 @@ def setupBacker(hby, keldb_queued, schemadb_queued, alias="backer", mbx=None, tc
     doers.extend([regDoer, directant, serverDoer, httpServerDoer, rep, witStart, receiptEnd, *oobiery.doers])
 
     return doers
+
 
 class BackerStart(doing.DoDoer):
     """ Doer to print backer prefix after initialization
@@ -148,7 +154,7 @@ class BackerStart(doing.DoDoer):
         while not self.hab.inited:
             yield self.tock
 
-        print("Backer", self.hab.name, "ready", self.hab.pre)
+        logger.info(f"Backer ready {self.hab.pre} (hab name: {self.hab.name})")
 
     def msgDo(self, tymth=None, tock=0.0):
         """
@@ -315,7 +321,8 @@ class HttpEnd:
             else:
                 rep.set_header('Content-Type', "application/json")
                 rep.status = falcon.HTTP_204
-        print("Post msg received of type", ilk)
+        logger.debug(f"Post msg received of type {ilk}")
+
 
 class ReceiptEnd(doing.DoDoer):
     """ Endpoint class for Witnessing receipting functionality
@@ -336,7 +343,6 @@ class ReceiptEnd(doing.DoDoer):
         self.receipts = set()
         self.psr = parsing.Parser(framed=True,
                                   kvy=self.hab.kvy)
-
         super(ReceiptEnd, self).__init__(doers=[doing.doify(self.interceptDo)])
 
     def on_post(self, req, rep):
