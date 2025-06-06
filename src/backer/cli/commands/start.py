@@ -106,14 +106,12 @@ def runBacker(name="backer", base="", alias="backer", bran="", tcp=5665, http=56
     crl = crawling.Crawler(ledger=ledger)
 
     secondaryControllerStop = threading.Event()
-    exceptionContainer = []
 
     # Add the monitor doer to main doers
     monitor_doer = SecondaryThreadMonitorer(
         crl=crl,
         queuer=queuer,
         secondaryControllerStop=secondaryControllerStop,
-        exceptionContainer=exceptionContainer,
         logger=logger
     )
 

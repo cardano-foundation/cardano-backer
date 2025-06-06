@@ -8,11 +8,11 @@ class SecondaryThreadMonitorer(doing.Doer):
     """
     Doer that monitors the shared exception variable and restarts the secondary thread if needed.
     """
-    def __init__(self, crl, queuer, secondaryControllerStop, exceptionContainer, logger):
+    def __init__(self, crl, queuer, secondaryControllerStop, logger):
         self.crl = crl
         self.queuer = queuer
         self.secondaryControllerStop = secondaryControllerStop
-        self.exceptionContainer = exceptionContainer
+        self.exceptionContainer = []
         self.logger = logger
         self.doer_thread = None
         self.tock = 1.0
@@ -26,7 +26,6 @@ class SecondaryThreadMonitorer(doing.Doer):
             [self.crl, self.queuer],
             self.secondaryControllerStop,
             self.logger,
-            self.exceptionContainer,
             restart=restart
         )
 
@@ -47,7 +46,7 @@ class SecondaryThreadMonitorer(doing.Doer):
             self.secondaryControllerStop.set()
             self.doer_thread.join()
 
-    def runSecondaryController(self, doers, secondaryControllerStop, logger=help.ogler.getLogger(), exceptionContainer=None, restart=False):
+    def runSecondaryController(self, doers, secondaryControllerStop, logger=help.ogler.getLogger(), restart=False):
         """
         Run all doers (e.g., from Crawler and Queueing) in a dedicated thread using a separate directing.runController.
         All ogmios requests and queueing will happen in this thread.
@@ -60,7 +59,7 @@ class SecondaryThreadMonitorer(doing.Doer):
                 directing.runController(doers=doers, expire=0.0)
             except Exception as ex:
                 logger.critical(f"Secondary controller encountered an error: {ex}")
-                exceptionContainer.append(ex)
+                self.exceptionContainer.append(ex)
             finally:
                 secondaryControllerStop.set()
 
