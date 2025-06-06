@@ -67,7 +67,7 @@ class Crawler(doing.DoDoer):
                 if not self.ledger.onTip and block.height == tip.height:
                     logger.info(f"[{datetime.datetime.now()}] Reached tip at slot {block.slot}")
                     self.ledger.onTip = True
-                    tock = 1.0
+                    self.tock = 1.0
 
                 # Find transactions involving cardano backer
                 if isinstance(block, ogmios.Block) and hasattr(block, "transactions"):
