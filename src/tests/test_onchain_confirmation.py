@@ -4,7 +4,6 @@ src.tests.test_onchain_confirmation module
 
 """
 import logging
-import os
 import json
 from keri import help
 from keri.app import habbing
@@ -81,8 +80,8 @@ class TestUtxos(TestBase):
 
             ledger.updateTip(tipHeight)
             trans['block_height'] = blockHeight
-            ledger.updateTrans(trans, type=cardaning.CardanoType.KEL)
-            ledger.confirmTrans(type=cardaning.CardanoType.KEL)
+            ledger.updateTrans(trans, txType=cardaning.CardanoType.KEL)
+            ledger.confirmTrans(txType=cardaning.CardanoType.KEL)
             confirmingTrans = ledger.getConfirmingTrans(transId)
             assert confirmingTrans != None
 
@@ -92,8 +91,8 @@ class TestUtxos(TestBase):
             ledger.updateTip(tipHeight)
             trans['tip'] = tipHeight - TRANSACTION_TIMEOUT_DEPTH - 1
             trans['block_height'] = blockHeight
-            ledger.updateTrans(trans, type=cardaning.CardanoType.KEL)
-            ledger.confirmTrans(type=cardaning.CardanoType.KEL)
+            ledger.updateTrans(trans, txType=cardaning.CardanoType.KEL)
+            ledger.confirmTrans(txType=cardaning.CardanoType.KEL)
             cls.wait_for_updating_utxo()
 
             ledger.publishEvents(type=cardaning.CardanoType.KEL)
@@ -118,13 +117,13 @@ class TestUtxos(TestBase):
             ledger.updateTip(tipHeight)
             newTrans['block_height'] = blockHeight
             newTrans['block_slot'] = tipHeight - 1
-            ledger.updateTrans(newTrans, type=cardaning.CardanoType.KEL)
+            ledger.updateTrans(newTrans, txType=cardaning.CardanoType.KEL)
             ledger.updateTip(tipHeight - 1)
             ledger.rollbackBlock((tipHeight - 2), type=cardaning.CardanoType.KEL)
             oldTrans = ledger.getConfirmingTrans(newTransId)
             cls.wait_for_updating_utxo()
             ledger.publishEvents(type=cardaning.CardanoType.KEL)
-            ledger.confirmTrans(type=cardaning.CardanoType.KEL)
+            ledger.confirmTrans(txType=cardaning.CardanoType.KEL)
 
             # Load new trans
             for keys, item in ledger.keldbConfirming.getItemIter():
@@ -142,8 +141,8 @@ class TestUtxos(TestBase):
             tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH
             ledger.updateTip(tipHeight)
             latestTrans['block_height'] = blockHeight
-            ledger.updateTrans(latestTrans, type=cardaning.CardanoType.KEL)
-            ledger.confirmTrans(type=cardaning.CardanoType.KEL)
+            ledger.updateTrans(latestTrans, txType=cardaning.CardanoType.KEL)
+            ledger.confirmTrans(txType=cardaning.CardanoType.KEL)
             confirmingTrans = ledger.getConfirmingTrans(latestTrans['id'])
             assert confirmingTrans == None
 
@@ -205,7 +204,7 @@ class TestUtxos(TestBase):
             ledger.updateTip(tipHeight)
             trans['block_height'] = blockHeight
             ledger.updateTrans(trans, cardaning.CardanoType.SCHEMA)
-            ledger.confirmTrans(type=cardaning.CardanoType.SCHEMA)
+            ledger.confirmTrans(txType=cardaning.CardanoType.SCHEMA)
             confirmingTrans = ledger.getConfirmingTrans(transId)
             assert confirmingTrans != None
 
@@ -215,8 +214,8 @@ class TestUtxos(TestBase):
             ledger.updateTip(tipHeight)
             trans['tip'] = tipHeight - TRANSACTION_TIMEOUT_DEPTH - 1
             trans['block_height'] = blockHeight
-            ledger.updateTrans(trans, type=cardaning.CardanoType.SCHEMA)
-            ledger.confirmTrans(type=cardaning.CardanoType.SCHEMA)
+            ledger.updateTrans(trans, txType=cardaning.CardanoType.SCHEMA)
+            ledger.confirmTrans(txType=cardaning.CardanoType.SCHEMA)
             cls.wait_for_updating_utxo()
             ledger.publishEvents(type=cardaning.CardanoType.SCHEMA)
 
@@ -240,13 +239,13 @@ class TestUtxos(TestBase):
             ledger.updateTip(tipHeight)
             newTrans['block_height'] = blockHeight
             newTrans['block_slot'] = tipHeight - 1
-            ledger.updateTrans(newTrans, type=cardaning.CardanoType.SCHEMA)
+            ledger.updateTrans(newTrans, txType=cardaning.CardanoType.SCHEMA)
             ledger.updateTip(tipHeight - 1)
             ledger.rollbackBlock((tipHeight - 2), type=cardaning.CardanoType.SCHEMA)
             oldTrans = ledger.getConfirmingTrans(newTransId)
             cls.wait_for_updating_utxo()
             ledger.publishEvents(type=cardaning.CardanoType.SCHEMA)
-            ledger.confirmTrans(type=cardaning.CardanoType.SCHEMA)
+            ledger.confirmTrans(txType=cardaning.CardanoType.SCHEMA)
 
             # Load new trans
             for keys, item in ledger.schemadbConfirming.getItemIter():
@@ -264,7 +263,7 @@ class TestUtxos(TestBase):
             tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH
             ledger.updateTip(tipHeight)
             latestTrans['block_height'] = blockHeight
-            ledger.updateTrans(latestTrans, type=cardaning.CardanoType.SCHEMA)
-            ledger.confirmTrans(type=cardaning.CardanoType.SCHEMA)
+            ledger.updateTrans(latestTrans, txType=cardaning.CardanoType.SCHEMA)
+            ledger.confirmTrans(txType=cardaning.CardanoType.SCHEMA)
             confirmingTrans = ledger.getConfirmingTrans(latestTrans['id'])
             assert confirmingTrans == None
