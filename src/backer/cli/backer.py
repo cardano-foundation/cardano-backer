@@ -6,7 +6,6 @@ backer.cli.commands module
 import multicommand
 import traceback
 from keri import help
-from keri.app import directing
 from backer.cli import commands
 
 logger = help.ogler.getLogger()
@@ -21,11 +20,9 @@ def main():
         return
 
     try:
-        doers = args.handler(args)
-        directing.runController(doers=doers, expire=0.0)
-
+        args.handler(args)
     except Exception as ex:
-        print(f"ERR: {ex}")
+        logger.error(f"ERR: {ex}")
         traceback.print_exc()
         return -1
 

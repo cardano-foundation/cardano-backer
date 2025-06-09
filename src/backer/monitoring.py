@@ -1,11 +1,9 @@
 import threading
 import os
 from keri import help
-from keri.app import directing
 from hio.base import doing
 from ogmios.client import Client
 from backer import cardaning, queueing, crawling
-
 logger = help.ogler.getLogger()
 
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
@@ -18,6 +16,7 @@ class CardanoThreadMonitor(doing.Doer):
     """
     def __init__(self, hab):
         self.hab = hab
+        self.doist = doing.Doist(limit=0.0, tock=0.03125, real=True)
         self.thread = None
         self.tock = 5.0
         super().__init__(tock=self.tock)
@@ -33,8 +32,7 @@ class CardanoThreadMonitor(doing.Doer):
             yield self.tock
 
     def exit(self):
-        if self.thread:
-            self.thread.join()
+        self.doist.exit()
 
     def _startThread(self):
         def doCardano():
@@ -44,9 +42,9 @@ class CardanoThreadMonitor(doing.Doer):
                     queuer = queueing.Queuer(ledger=ledger)
                     crawler = crawling.Crawler(ledger=ledger)
 
-                    directing.runController(doers=[crawler, queuer], expire=0.0)
+                    self.doist.do(doers=[crawler, queuer])
             except Exception as ex:
-                logger.critical(f"Secondary controller encountered an error: {ex}")
+                logger.critical(f"Secondary controller encountered an error: {ex}", exc_info=True)
 
         self.thread = threading.Thread(target=doCardano, daemon=True)
         self.thread.start()
