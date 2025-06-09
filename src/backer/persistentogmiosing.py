@@ -1,3 +1,10 @@
+# -*- encoding: utf-8 -*-
+"""
+Cardano Backer
+backer.persistentogmiosing module
+
+Increases performance by using a single injected Ogmios websocket client for relevant operations
+"""
 from typing import List, Union
 from pycardano import OgmiosV6ChainContext
 from pycardano.address import Address

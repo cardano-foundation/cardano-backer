@@ -1,3 +1,10 @@
+# -*- encoding: utf-8 -*-
+"""
+Cardano Backer
+backer.monitoring module
+
+Monitor off-loads Cardano activity (which is blocking) to a separate thread and reliably handles failures
+"""
 import threading
 import os
 from keri import help

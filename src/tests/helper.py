@@ -49,6 +49,7 @@ def is_process_running(proc_path, proc_port):
         logger.critical(f"Error: {e}")
         return False
 
+
 def set_test_env():
     os.environ["BACKER_SALT"] = BACKER_SALT
     os.environ["BACKER_PORT"] = str(BACKER_TEST_PORT)
@@ -58,16 +59,17 @@ def set_test_env():
     os.environ["OGMIOS_HOST"] = DEVNET_OGMIOS_HOST
     os.environ["OGMIOS_PORT"] = str(DEVNET_OGMIOS_PORT)
 
+
 class TestEnd:
-    def make_test_end(self, route, endclass, cues=None, type=cardaning.CardanoType.KEL):
+    def make_test_end(self, route, endclass, cues=None):
         set_test_env()
         name = "testbacker"
         bran = ""
         alias = "testbacker"
         ks = keeping.Keeper(name=name,
-                        base=BACKER_TEST_STORE_DIR,
-                        temp=True,
-                        reopen=True)
+                            base=BACKER_TEST_STORE_DIR,
+                            temp=True,
+                            reopen=True)
         aeid = ks.gbls.get('aeid')
 
         if aeid is None:
@@ -86,13 +88,14 @@ class TestEnd:
         client = TestClient(app)
 
         if cues:
-            endResource = endclass(hab=hab, keldb_queued=ledger.keldb_queued, cues=cues) if type == cardaning.CardanoType.KEL else endclass(hab=hab, schemadb_queued=ledger.schemadb_queued, cues=cues)
+            endResource = endclass(hab=hab, cues=cues)
         else:
-            endResource = endclass(hab=hab, keldb_queued=ledger.keldb_queued) if type == cardaning.CardanoType.KEL else endclass(hab=hab, schemadb_queued=ledger.schemadb_queued)
+            endResource = endclass(hab=hab)
 
         app.add_route(route, endResource)
 
         return hby, hab, client, ledger
+
 
 class TestBase:
     @classmethod

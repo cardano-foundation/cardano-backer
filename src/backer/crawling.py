@@ -1,9 +1,9 @@
 # -*- encoding: utf-8 -*-
 """
-CARDANO-BACKER
+Cardano Backer
 backer.crawling module
 
-class to support subcribe tip from ogmios and cardano node
+Cardano crawler to ensure any on-chain transactions reliably appear over time
 """
 import os
 import ogmios
@@ -12,31 +12,26 @@ import json
 import datetime
 from hio.base import doing
 from keri import help
-
-from backer.cardaning import CardanoType, PointRecord, CURRENT_SYNC_POINT
-
+from backer.cardaning import TransactionType, PointRecord, CardanoKomerKey
 
 logger = help.ogler.getLogger()
+
 OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
 OGMIOS_PORT = int(os.environ.get('OGMIOS_PORT', 1337))
 START_SLOT_NUMBER = int(os.environ.get('START_SLOT_NUMBER') or 0)
 START_BLOCK_HEADER_HASH = os.environ.get('START_BLOCK_HEADER_HASH', "")
 
 
-class Crawler(doing.DoDoer):
+class Crawler(doing.Doer):
 
-    def __init__(self, ledger, **kwa):
+    def __init__(self, ledger, tock=0.0):
         self.ledger = ledger
-        doers = [doing.doify(self.crawlBlockDo), doing.doify(self.confirmTrans)]
-        super(Crawler, self).__init__(doers=doers, **kwa)
-
-    def crawlBlockDo(self, tymth=None, tock=0.0):
-        self.wind(tymth)
         self.tock = tock
-        _ = (yield self.tock)
+        super().__init__(tock=self.tock)
 
+    def recur(self, tymth=None):
         startPoint = ogmios.Point(START_SLOT_NUMBER, START_BLOCK_HEADER_HASH) if START_SLOT_NUMBER > 0 else ogmios.Origin()
-        lastBlock = self.ledger.states.get(CURRENT_SYNC_POINT)
+        lastBlock = self.ledger.states.get(CardanoKomerKey.CURRENT_SYNC_POINT.value)
 
         if lastBlock:
             startPoint = ogmios.Point(lastBlock.slot, lastBlock.id)
@@ -44,13 +39,8 @@ class Crawler(doing.DoDoer):
         _, _, _ = self.ledger.client.find_intersection.execute([startPoint])
 
         while True:
-            # @TODO - focnnor: datetime can be globally set for as a logger prefix
-            logger.debug(f"[{datetime.datetime.now()}] Requesting nodeBlockHeight from ogmios...")
             nodeBlockHeight, _ = self.ledger.client.query_block_height.execute()
-            logger.debug(f"[{datetime.datetime.now()}] Retrieved nodeBlockHeight: {nodeBlockHeight} [current tipHeight: {self.ledger.tipHeight}] [onTip: {self.ledger.onTip}]")
-
             if self.ledger.onTip and nodeBlockHeight == self.ledger.tipHeight:
-                self.tock = 1.0
                 yield self.tock
                 continue
 
@@ -74,34 +64,23 @@ class Crawler(doing.DoDoer):
                     logger.debug(f"[{datetime.datetime.now()}] {direction}:\nblock: {block}\ntip:{tip}\n")
 
                     for tx in block.transactions:
-                        txId = tx['id']
-                        confirmingTrans = self.ledger.getConfirmingTrans(txId)
-                        if confirmingTrans is not None:
-                            trans = json.loads(confirmingTrans)
-                            trans["block_slot"] = block.slot
-                            trans["block_height"] = block.height
-                            item_type = CardanoType(trans["type"])
-                            self.ledger.updateTrans(trans, item_type)
+                        confirmingTx = self.ledger.getConfirmingTx(tx["id"])
+                        if confirmingTx is not None:
+                            tx = json.loads(confirmingTx)
+                            tx["block_slot"] = block.slot
+                            tx["block_height"] = block.height
+                            self.ledger.updateConfirmingTxMetadata(tx, TransactionType(tx["type"]))
             else:
                 # Rollback transactions, we receipt a Point instead of a Block in backward direction
                 if isinstance(block, ogmios.Point):
                     logger.debug(f"[{datetime.datetime.now()}] {direction}:\nblock: {block}\ntip:{tip}\n")
                     self.ledger.updateTip(tip.height)
-                    self.ledger.rollbackBlock(block.slot, type=CardanoType.KEL)
-                    self.ledger.rollbackBlock(block.slot, type=CardanoType.SCHEMA)
+                    self.ledger.rollbackToSlot(block.slot, txType=TransactionType.KEL)
+                    self.ledger.rollbackToSlot(block.slot, txType=TransactionType.SCHEMA)
 
-            self.ledger.states.pin(CURRENT_SYNC_POINT, PointRecord(id=block.id, slot=block.slot))
+            self.ledger.confirmOrTimeoutDeepTxs(TransactionType.KEL)
+            self.ledger.confirmOrTimeoutDeepTxs(TransactionType.SCHEMA)
 
-            yield self.tock
-
-    def confirmTrans(self, tymth=None, tock=1.0):
-        self.wind(tymth)
-        self.tock = tock
-        _ = (yield self.tock)
-
-        while True:
-            if self.ledger:
-                self.ledger.confirmTrans(CardanoType.KEL)
-                self.ledger.confirmTrans(CardanoType.SCHEMA)
+            self.ledger.states.pin(CardanoKomerKey.CURRENT_SYNC_POINT.value, PointRecord(id=block.id, slot=block.slot))
 
             yield self.tock

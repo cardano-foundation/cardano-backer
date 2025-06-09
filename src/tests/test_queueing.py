@@ -41,12 +41,12 @@ class TestQueueing(TestBase):
             msg = serder.raw
 
             ledger = cardaning.Cardano(hab=hab, client=client)
-            ledger.keldb_queued.pin(keys=(serder.pre, serder.said), val=msg)
+            ledger.kelsQueued.pin(keys=(serder.pre, serder.said), val=msg)
 
             # Verify push to queue then get serder from keys
-            assert ledger.keldb_queued.get((serder.pre, serder.said)) == serder.raw.decode('utf-8')
+            assert ledger.kelsQueued.get((serder.pre, serder.said)) == serder.raw.decode('utf-8')
             # Clean up test DB
-            ledger.keldb_queued.trim()
+            ledger.kelsQueued.trim()
 
 
     def test_publish_kel(cls):
@@ -103,29 +103,29 @@ class TestQueueing(TestBase):
             msg_2 = serder_2.raw
 
             ledger = cardaning.Cardano(hab=hab, client=client)
-            ledger.keldb_queued.pin(keys=(serder_1.pre, serder_1.said), val=msg_1)
-            ledger.keldb_queued.pin(keys=(serder_2.pre, serder_2.said), val=msg_2)
+            ledger.kelsQueued.pin(keys=(serder_1.pre, serder_1.said), val=msg_1)
+            ledger.kelsQueued.pin(keys=(serder_2.pre, serder_2.said), val=msg_2)
 
             # Verify keldb_queued had events
-            keldb_queued_items = [(pre, serder) for (pre, _), serder in ledger.keldb_queued.getItemIter()]
+            keldb_queued_items = [(pre, serder) for (pre, _), serder in ledger.kelsQueued.getItemIter()]
             assert keldb_queued_items != []
 
-            ledger.publishEvents(type=cardaning.CardanoType.KEL)
+            ledger.publishEvents(txType=cardaning.TransactionType.KEL)
 
             # Verify keldb_queued published and remove from keldb_queued
-            keldb_queued_items = [(pre, serder) for (pre, _), serder in ledger.keldb_queued.getItemIter()]
+            keldb_queued_items = [(pre, serder) for (pre, _), serder in ledger.kelsQueued.getItemIter()]
             assert keldb_queued_items == []
 
             # Verify event published and keldb_published had events from keldb_queued
-            keldb_published = [(pre, serder) for (pre, _), serder in ledger.keldb_published.getItemIter()]
+            keldb_published = [(pre, serder) for (pre, _), serder in ledger.kelsPublished.getItemIter()]
             assert keldb_published != []
             serder_1 = serdering.SerderKERI(raw=keldb_published[0][1].encode('utf-8'))
             serder_2 = serdering.SerderKERI(raw=keldb_published[1][1].encode('utf-8'))
             assert serder_1.said == rot['d']
             assert serder_2.said == icp['d']
             # Clean up test DB
-            ledger.keldb_queued.trim()
-            ledger.keldb_published.trim()
+            ledger.kelsQueued.trim()
+            ledger.kelsPublished.trim()
 
     def test_push_schema_to_queued(cls):
         salt = b"0123456789abcdef"
@@ -154,13 +154,13 @@ class TestQueueing(TestBase):
             schemer = scheming.Schemer(raw=json.dumps(schema).encode('utf-8'))
 
             ledger = cardaning.Cardano(hab=hab, client=client)
-            ledger.schemadb_queued.pin(keys=(schemer.said, ), val=schemer.raw)
+            ledger.schemasQueued.pin(keys=(schemer.said,), val=schemer.raw)
 
 
             # Verify push to queue then get schema from keys
-            assert ledger.schemadb_queued.get((schemer.said, )) == schemer.raw.decode('utf-8')
+            assert ledger.schemasQueued.get((schemer.said,)) == schemer.raw.decode('utf-8')
             # Clean up test DB
-            ledger.schemadb_queued.trim()
+            ledger.schemasQueued.trim()
 
 
     def test_publish_schema(cls):
@@ -212,23 +212,23 @@ class TestQueueing(TestBase):
             msg_2 = schemer_2.raw
 
             ledger = cardaning.Cardano(hab=hab, client=client)
-            ledger.schemadb_queued.pin(keys=(schemer_1.said, ), val=msg_1)
-            ledger.schemadb_queued.pin(keys=(schemer_2.said, ), val=msg_2)
+            ledger.schemasQueued.pin(keys=(schemer_1.said,), val=msg_1)
+            ledger.schemasQueued.pin(keys=(schemer_2.said,), val=msg_2)
 
             # Verify schemadb_queued had events
-            schemadb_queued_items = [(said, schemer) for (said, ), schemer in ledger.schemadb_queued.getItemIter()]
+            schemadb_queued_items = [(said, schemer) for (said, ), schemer in ledger.schemasQueued.getItemIter()]
             assert schemadb_queued_items != []
 
             cls.wait_for_updating_utxo()
             # Publish events
-            ledger.publishEvents(type=cardaning.CardanoType.SCHEMA)
+            ledger.publishEvents(txType=cardaning.TransactionType.SCHEMA)
 
             # Verify schemadb_queued published and remove from schemadb_queued
-            schemadb_queued_items = [(said, schemer) for (said, ), schemer in ledger.schemadb_queued.getItemIter()]
+            schemadb_queued_items = [(said, schemer) for (said, ), schemer in ledger.schemasQueued.getItemIter()]
             assert schemadb_queued_items == []
 
             # Verify event published and schemadb_published had events from schemadb_queued
-            schemadb_published = [(said, schemer) for (said, ), schemer in ledger.schemadb_published.getItemIter()]
+            schemadb_published = [(said, schemer) for (said, ), schemer in ledger.schemasPublished.getItemIter()]
             assert schemadb_published != []
             print(f"schemadb_published: {schemadb_published}")
             schemer_1 = scheming.Schemer(raw=schemadb_published[0][1].encode('utf-8'))
@@ -236,5 +236,5 @@ class TestQueueing(TestBase):
             assert schemer_1.said == schema_1['$id']
             assert schemer_2.said == schema_2['$id']
             # Clean up test DB
-            ledger.schemadb_queued.trim()
-            ledger.schemadb_published.trim()
+            ledger.schemasQueued.trim()
+            ledger.schemasPublished.trim()

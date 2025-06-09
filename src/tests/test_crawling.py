@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import backer.crawling as crawling
 import ogmios
-from backer.cardaning import CardanoType, PointRecord
+from backer.cardaning import TransactionType, PointRecord
 
 class MockPoint:
     def __init__(self, *args, **kwargs):
@@ -72,7 +72,7 @@ def test_crawlBlockDo_yields_and_handles_tip(mock_ledger):
         block,
         None
     )
-    mock_ledger.getConfirmingTrans.return_value = '{"type": "CARDANO_KEL"}'
+    mock_ledger.getConfirmingTx.return_value = '{"type": "CARDANO_KEL"}'
 
     gen = crawler.crawlBlockDo()
     next(gen)  # prime generator
@@ -81,11 +81,11 @@ def test_crawlBlockDo_yields_and_handles_tip(mock_ledger):
 
     expected_updateTrans_call = (
         {'type': 'CARDANO_KEL', 'block_slot': 42, 'block_height': 100},
-        CardanoType.KEL
+        TransactionType.KEL
     )
     expected_states_pin_call = ('b_syncp', PointRecord(id='mock_block_id', slot=42))
 
-    mock_ledger.updateTrans.assert_called_with(*expected_updateTrans_call)
+    mock_ledger.updateConfirmingTxMetadata.assert_called_with(*expected_updateTrans_call)
     mock_ledger.updateTip.assert_called_with(100)
     mock_ledger.states.pin.assert_called_with(*expected_states_pin_call)
 
@@ -94,8 +94,8 @@ def test_confirmTrans_calls_ledger_methods(mock_ledger):
     gen = crawler.confirmTrans()
     next(gen)  # prime generator
     next(gen)
-    mock_ledger.confirmTrans.assert_any_call(CardanoType.KEL)
-    mock_ledger.confirmTrans.assert_any_call(CardanoType.SCHEMA)
+    mock_ledger.confirmOrTimeoutDeepTxs.assert_any_call(TransactionType.KEL)
+    mock_ledger.confirmOrTimeoutDeepTxs.assert_any_call(TransactionType.SCHEMA)
 
 def test_crawlBlockDo_skips_on_point_block(mock_ledger):
     crawler = crawling.Crawler(mock_ledger)
@@ -112,7 +112,7 @@ def test_crawlBlockDo_skips_on_point_block(mock_ledger):
     gen = crawler.crawlBlockDo()
     next(gen)
     next(gen)  # Should yield without calling updateTrans
-    assert not mock_ledger.updateTrans.called
+    assert not mock_ledger.updateConfirmingTxMetadata.called
 
 def test_crawlBlockDo_skips_on_origin_block(mock_ledger):
     crawler = crawling.Crawler(mock_ledger)
@@ -129,7 +129,7 @@ def test_crawlBlockDo_skips_on_origin_block(mock_ledger):
     gen = crawler.crawlBlockDo()
     next(gen)
     next(gen)
-    assert not mock_ledger.updateTrans.called
+    assert not mock_ledger.updateConfirmingTxMetadata.called
 
 def test_crawlBlockDo_skips_on_ebb_blocktype(mock_ledger, monkeypatch):
     crawler = crawling.Crawler(mock_ledger)
@@ -154,7 +154,7 @@ def test_crawlBlockDo_skips_on_ebb_blocktype(mock_ledger, monkeypatch):
     gen = crawler.crawlBlockDo()
     next(gen)
     next(gen)
-    assert not mock_ledger.updateTrans.called
+    assert not mock_ledger.updateConfirmingTxMetadata.called
 
 def test_crawlBlockDo_stops_when_on_tip_and_retries_on_new_block(mock_ledger):
     """
@@ -200,25 +200,25 @@ def test_crawlBlockDo_stops_when_on_tip_and_retries_on_new_block(mock_ledger):
     ]
 
     # Simulate confirming transaction type
-    mock_ledger.getConfirmingTrans.return_value = '{"type": "CARDANO_KEL"}'
+    mock_ledger.getConfirmingTx.return_value = '{"type": "CARDANO_KEL"}'
 
     gen = crawler.crawlBlockDo()
     next(gen)  # prime generator
 
     # First: fetch and process block 100
     next(gen)
-    assert mock_ledger.updateTrans.called
+    assert mock_ledger.updateConfirmingTxMetadata.called
     mock_ledger.updateTip.assert_called_with(100)
 
     # Second: on tip, should just yield, not call updateTrans again
-    mock_ledger.updateTrans.reset_mock()
+    mock_ledger.updateConfirmingTxMetadata.reset_mock()
     mock_ledger.updateTip.reset_mock()
     yielded = next(gen)
-    assert not mock_ledger.updateTrans.called
+    assert not mock_ledger.updateConfirmingTxMetadata.called
     assert not mock_ledger.updateTip.called
     assert yielded == 1.0
 
     # Third: tipHeight increases to 101, fetch and process block 101
     next(gen)
-    assert mock_ledger.updateTrans.called
+    assert mock_ledger.updateConfirmingTxMetadata.called
     mock_ledger.updateTip.assert_called_with(101)

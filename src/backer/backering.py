@@ -1,9 +1,9 @@
 # -*- encoding: utf-8 -*-
 """
-KERI
-keri.app.backering module
+Cardano Backer
+backer.backering module
 
-class to support registrar backers
+Backer with witness APIs that writes KELs or schemas onto a ledger async
 """
 
 import falcon
@@ -79,13 +79,10 @@ def setupBacker(hby, alias="backer", mbx=None, tcpPort=5631, httpPort=5632):
     httpEnd = HttpEnd(rxbs=parser.ims, mbx=mbx, hab=hab)
     app.add_route("/", httpEnd)
 
-    keldb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.KEL_QUEUED.value)
-    schemadb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.SCHEMA_QUEUED.value)
-
-    receiptEnd = ReceiptEnd(hab=hab, keldb_queued=keldb_queued, inbound=cues)
+    receiptEnd = ReceiptEnd(hab=hab, inbound=cues)
     app.add_route("/receipts", receiptEnd)
 
-    schemaEnd = SchemaEnd(hab=hab, schemadb_queued=schemadb_queued)
+    schemaEnd = SchemaEnd(hab=hab)
     app.add_route("/schemas", schemaEnd)
 
     server = http.Server(port=httpPort, app=app)
@@ -334,9 +331,10 @@ class ReceiptEnd(doing.DoDoer):
 
      """
 
-    def __init__(self, hab, keldb_queued, inbound=None, outbound=None, aids=None):
+    def __init__(self, hab, inbound=None, outbound=None, aids=None):
         self.hab = hab
-        self.keldb_queued = keldb_queued
+        self.queue = subing.Suber(db=hab.db, subkey=cardaning.CardanoSuberKey.KELS_QUEUED.value)
+        self.published = subing.Suber(db=hab.db, subkey=cardaning.CardanoSuberKey.KELS_PUBLISHED.value)
         self.inbound = inbound if inbound is not None else decking.Deck()
         self.outbound = outbound if outbound is not None else decking.Deck()
         self.aids = aids
@@ -375,10 +373,6 @@ class ReceiptEnd(doing.DoDoer):
         msg = bytearray(serder.raw)
         msg.extend(cr.attachments.encode("utf-8"))
 
-        # Check duplicated event
-        existing_said = self.hab.db.getKeLast(key=dbing.snKey(pre=pre,
-                                                        sn=serder.sn))
-
         self.psr.parseOne(ims=bytearray(msg), local=True)
 
         if pre in self.hab.kevers:
@@ -392,9 +386,11 @@ class ReceiptEnd(doing.DoDoer):
             rct = self.hab.receipt(serder)
             self.psr.parseOne(bytes(rct))
 
-            if not existing_said:
+            # Queue to write on-chain
+            keys = (pre, serder.said)
+            if not self.queue.get(keys=keys) or self.published.get(keys=keys):
                 evt = self.hab.db.cloneEvtMsg(pre=serder.pre, fn=0, dig=serder.said)
-                self.keldb_queued.pin(keys=(pre, serder.said), val=bytearray(evt))
+                self.queue.pin(keys=(pre, serder.said), val=bytearray(evt))
 
             rep.set_header('Content-Type', "application/json+cesr")
             rep.status = falcon.HTTP_200
@@ -489,6 +485,7 @@ class ReceiptEnd(doing.DoDoer):
 
             yield self.tock
 
+
 class QryRpyMailboxIterable:
 
     def __init__(self, cues, mbx, said, retry=5000, hab=None):
@@ -517,6 +514,7 @@ class QryRpyMailboxIterable:
             return b''
 
         return next(self.iter)
+
 
 class MailboxIterable:
     TimeoutMBX = 30000000
@@ -556,10 +554,10 @@ class MailboxIterable:
         raise StopIteration
 
 
-class SchemaEnd():
-    def __init__(self, hab, schemadb_queued):
+class SchemaEnd:
+    def __init__(self, hab):
         self.hab = hab
-        self.schemadb_queued = schemadb_queued
+        self.queue = subing.Suber(db=hab.db, subkey=cardaning.CardanoSuberKey.SCHEMAS_QUEUED.value)
 
     def on_post(self, req: falcon.Request, rep: falcon.Response):
         if req.method == "OPTIONS":
@@ -572,13 +570,12 @@ class SchemaEnd():
 
         try:
             schemer = scheming.Schemer(raw=data)
-            existing_schemer = self.hab.db.schema.get(keys=(schemer.said,))
-
-            if not existing_schemer:
-                self.hab.db.schema.pin(keys=(schemer.said,), val=schemer)
-                self.schemadb_queued.pin(keys=(schemer.said, ), val=schemer.raw)
         except kering.ValidationError as e:
             logger.debug(f"Error parsing schema: {e}")
             raise falcon.HTTPBadRequest(description="Invalid schema")
+
+        if not self.hab.db.schema.get(keys=(schemer.said,)):
+            self.queue.pin(keys=(schemer.said,), val=schemer.raw)
+            self.hab.db.schema.pin(keys=(schemer.said,), val=schemer)
 
         rep.status = falcon.HTTP_204
