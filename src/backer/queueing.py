@@ -1,18 +1,17 @@
 import os
 from hio.base import doing
 from keri import help
-from keri.core import serdering, scheming
 from backer.cardaning import Cardano, CardanoType
 
 logger = help.ogler.getLogger()
 
 
-class Queueing(doing.Doer):
+class Queuer(doing.Doer):
 
-    def __init__(self, hab, ledger: Cardano):
-        self.hab = hab
+    def __init__(self, ledger: Cardano):
         self.ledger = ledger
-        self.tock = int(os.environ.get('QUEUE_DURATION', 30))  # the job should run daily.
+        self.tock = int(os.environ.get('QUEUE_DURATION', 30))
+        super(Queuer, self).__init__(tock=self.tock)
 
     def recur(self, tyme=None):
         while True:
@@ -21,4 +20,3 @@ class Queueing(doing.Doer):
                 self.ledger.publishEvents(type=CardanoType.SCHEMA)
 
             yield self.tock
-
