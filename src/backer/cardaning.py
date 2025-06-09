@@ -16,6 +16,7 @@ from keri import help
 from keri.db import subing, koming
 from keri.core import serdering, scheming
 from backer.constants import METADATUM_LABEL_KEL, METADATUM_LABEL_SCHEMA
+from backer.persistentogmiosing import PersistentOgmiosV6ChainContext
 
 logger = help.ogler.getLogger()
 
@@ -61,6 +62,7 @@ class PointRecord:
     id: str 
     slot: int
 
+
 class Cardano:
     """
     Environment variables required:
@@ -98,7 +100,8 @@ class Cardano:
                                    schema=PointRecord,
                                    subkey=BACKER_STATE_DB)
 
-        self.context = pycardano.OgmiosV6ChainContext(
+        self.context = PersistentOgmiosV6ChainContext(
+            client=self.client,
             host=OGMIOS_HOST,
             port=OGMIOS_PORT,
             network=NETWORK
@@ -215,8 +218,8 @@ class Cardano:
             builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({metadatumLabel: value}))
             try:
                 signed_tx = builder.build_and_sign([self.payment_signing_key],
-                                                change_address=self.spending_addr,
-                                                merge_change=True)
+                                                   change_address=self.spending_addr,
+                                                   merge_change=True)
 
                 if len(signed_tx.to_cbor()) > MAX_TRANSACTION_SIZE - MAX_TRANSACTION_SIZE_MARGIN:
                     break
@@ -254,7 +257,7 @@ class Cardano:
                 self.addToPublished(event, type)
                 self.removeFromQueue(event, type)
 
-            logger.debug(f"Submitted tx: {submitting_trans}")
+            logger.info(f"Submitted tx: {submitting_trans}")
         except Exception as e:
             logger.critical(f"ERROR: Submit tx: {e}")
             # Add back to queue
@@ -301,36 +304,32 @@ class Cardano:
 
         return False
 
-    def confirmTrans(self, type: CardanoType):
-        dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
-        try:
-            for keys, item in dbConfirming.getItemIter():
-                if item is None:
-                    continue
+    def confirmTrans(self, txType: CardanoType):
+        dbConfirming = self.getCardanoDB(txType, CardanoDBType.CONFIRMING)
+        for keys, item in dbConfirming.getItemIter():
+            if item is None:
+                continue
 
-                item = json.loads(item)
-                transTip = int(item["tip"])
-                blockHeight = int(item["block_height"]) if 'block_height' in item.keys() else 0
+            item = json.loads(item)
+            transTip = int(item["tip"])
+            blockHeight = int(item["block_height"]) if 'block_height' in item.keys() else 0
 
-                # Check for confirmation
-                if self.tipHeight > 0 and blockHeight > 0 and self.tipHeight - blockHeight >= TRANSACTION_SECURITY_DEPTH:
-                    dbConfirming.rem(keys)
-                    self.dbConfirmingUtxos.rem(keys)
-                    continue
+            # Check for confirmation
+            if self.tipHeight > 0 and blockHeight > 0 and self.tipHeight - blockHeight >= TRANSACTION_SECURITY_DEPTH:
+                dbConfirming.rem(keys)
+                self.dbConfirmingUtxos.rem(keys)
+                continue
 
-                if self.tipHeight - transTip > TRANSACTION_TIMEOUT_DEPTH:
-                    for keri_item in item['keri_raw']:
-                        self.addToQueue(keri_item.encode('utf-8'), type)
+            if self.tipHeight - transTip > TRANSACTION_TIMEOUT_DEPTH:
+                for keri_item in item['keri_raw']:
+                    self.addToQueue(keri_item.encode('utf-8'), txType)
 
-                    dbConfirming.rem(keys)
-                    self.dbConfirmingUtxos.rem(keys)
+                dbConfirming.rem(keys)
+                self.dbConfirmingUtxos.rem(keys)
 
-        except Exception as e:
-            logger.critical(f"Cannot confirm transaction: {e}")
-
-    def updateTrans(self, trans, type:CardanoType):
+    def updateTrans(self, trans, txType: CardanoType):
         transId = trans['id']
-        dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
+        dbConfirming = self.getCardanoDB(txType, CardanoDBType.CONFIRMING)
         dbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
 
     def getAddressBalance(self, addr):

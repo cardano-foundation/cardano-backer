@@ -33,7 +33,7 @@ subcommands:
 
 ## Start script example
 ```
-./tests/start_backer.sh
+./scripts/start_backer.sh
 ```
 Check variables and environmental variables that you can pass to configure the backer.
 

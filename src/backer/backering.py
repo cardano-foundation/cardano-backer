@@ -175,7 +175,7 @@ class BackerStart(doing.DoDoer):
 
         if self.parser.ims:
             logger.info("Client %s received:\n%s\n...\n", self.kvy, self.parser.ims[:1024])
-        done = yield from self.parser.parsator()  # process messages continuously
+        done = yield from self.parser.parsator(local=True)  # process messages continuously
         return done  # should nover get here except forced close
 
     def escrowDo(self, tymth=None, tock=0.0):
