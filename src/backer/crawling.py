@@ -94,7 +94,7 @@ class Crawler(doing.DoDoer):
 
             yield self.tock
 
-    def confirmTrans(self, tymth=None, tock=0.0):
+    def confirmTrans(self, tymth=None, tock=1.0):
         self.wind(tymth)
         self.tock = tock
         _ = (yield self.tock)
