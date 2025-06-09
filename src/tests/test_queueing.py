@@ -5,17 +5,20 @@ src.tests.test_queueing module
 """
 import json
 from keri.app import habbing
-from keri.db import subing
 from keri.core import eventing, serdering, Salter, scheming
-from backer import queueing, cardaning
+from backer import cardaning
+
 from tests.helper import TestBase
+from ogmios.client import Client
+from tests.helper import DEVNET_OGMIOS_HOST, DEVNET_OGMIOS_PORT
+
 
 class TestQueueing(TestBase):
     def test_push_kel_to_queued(cls):
         salt = b"0123456789abcdef"
         salter = Salter(raw=salt)
 
-        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby:
+        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby, Client(DEVNET_OGMIOS_HOST, DEVNET_OGMIOS_PORT) as client:
             hab = hby.makeHab("test01", transferable=False)
 
             icp = {
@@ -37,9 +40,7 @@ class TestQueueing(TestBase):
             serder = serdering.SerderKERI(sad=icp, kind=eventing.Kinds.json)
             msg = serder.raw
 
-            keldb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.KEL_QUEUED.value)    
-            schemadb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.SCHEMA_QUEUED.value)
-            ledger = cardaning.Cardano(hab=hab, ks=hab.ks, keldb_queued=keldb_queued, schemadb_queued=schemadb_queued)
+            ledger = cardaning.Cardano(hab=hab, client=client)
             ledger.keldb_queued.pin(keys=(serder.pre, serder.said), val=msg)
 
             # Verify push to queue then get serder from keys
@@ -52,7 +53,7 @@ class TestQueueing(TestBase):
         salt = b"0123456789abcdef"
         salter = Salter(raw=salt)
 
-        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby:
+        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby, Client(DEVNET_OGMIOS_HOST, DEVNET_OGMIOS_PORT) as client:
             hab = hby.makeHab("test02", transferable=False)
 
             icp = {
@@ -101,9 +102,7 @@ class TestQueueing(TestBase):
             serder_2 = serdering.SerderKERI(sad=rot, kind=eventing.Kinds.json)
             msg_2 = serder_2.raw
 
-            keldb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.KEL_QUEUED.value)    
-            schemadb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.SCHEMA_QUEUED.value)
-            ledger = cardaning.Cardano(hab=hab, ks=hab.ks, keldb_queued=keldb_queued, schemadb_queued=schemadb_queued)
+            ledger = cardaning.Cardano(hab=hab, client=client)
             ledger.keldb_queued.pin(keys=(serder_1.pre, serder_1.said), val=msg_1)
             ledger.keldb_queued.pin(keys=(serder_2.pre, serder_2.said), val=msg_2)
 
@@ -132,7 +131,7 @@ class TestQueueing(TestBase):
         salt = b"0123456789abcdef"
         salter = Salter(raw=salt)
 
-        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby:
+        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby, Client(DEVNET_OGMIOS_HOST, DEVNET_OGMIOS_PORT) as client:
             hab = hby.makeHab("test01", transferable=False)
 
             schema = {
@@ -154,9 +153,7 @@ class TestQueueing(TestBase):
                     }
             schemer = scheming.Schemer(raw=json.dumps(schema).encode('utf-8'))
 
-            keldb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.KEL_QUEUED.value)    
-            schemadb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.SCHEMA_QUEUED.value)
-            ledger = cardaning.Cardano(hab=hab, ks=hab.ks, keldb_queued=keldb_queued, schemadb_queued=schemadb_queued)
+            ledger = cardaning.Cardano(hab=hab, client=client)
             ledger.schemadb_queued.pin(keys=(schemer.said, ), val=schemer.raw)
 
 
@@ -170,7 +167,7 @@ class TestQueueing(TestBase):
         salt = b"0123456789abcdef"
         salter = Salter(raw=salt)
 
-        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby:
+        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby, Client(DEVNET_OGMIOS_HOST, DEVNET_OGMIOS_PORT) as client:
             hab = hby.makeHab("test02", transferable=False)
             schema_1 = {
                 "$id": "EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdcczw",
@@ -214,9 +211,7 @@ class TestQueueing(TestBase):
             msg_1 = schemer_1.raw
             msg_2 = schemer_2.raw
 
-            keldb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.KEL_QUEUED.value)    
-            schemadb_queued = subing.Suber(db=hab.db, subkey=cardaning.CardanoDBName.SCHEMA_QUEUED.value)
-            ledger = cardaning.Cardano(hab=hab, ks=hab.ks, keldb_queued=keldb_queued, schemadb_queued=schemadb_queued)
+            ledger = cardaning.Cardano(hab=hab, client=client)
             ledger.schemadb_queued.pin(keys=(schemer_1.said, ), val=msg_1)
             ledger.schemadb_queued.pin(keys=(schemer_2.said, ), val=msg_2)
 
