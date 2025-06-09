@@ -17,6 +17,7 @@ class CardanoThreadMonitor(doing.Doer):
     def __init__(self, hab):
         self.hab = hab
         self.doist = doing.Doist(limit=0.0, tock=0.03125, real=True)
+        self.cleanupSignal = threading.Event()
         self.thread = None
         self.tock = 5.0
         super().__init__(tock=self.tock)
@@ -33,6 +34,7 @@ class CardanoThreadMonitor(doing.Doer):
 
     def exit(self):
         self.doist.exit()
+        self.cleanupSignal.wait(timeout=5.0)  # Give Ogmios client a moment to gracefully cleanup
 
     def _startThread(self):
         def doCardano():
@@ -45,6 +47,8 @@ class CardanoThreadMonitor(doing.Doer):
                     self.doist.do(doers=[crawler, queuer])
             except Exception as ex:
                 logger.critical(f"Secondary controller encountered an error: {ex}", exc_info=True)
+            finally:
+                self.cleanupSignal.set()
 
         self.thread = threading.Thread(target=doCardano, daemon=True)
         self.thread.start()
