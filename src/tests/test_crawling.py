@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import backer.crawling as crawling
 import ogmios
-from backer.cardaning import CardanoType
+from backer.cardaning import CardanoType, PointRecord
 
 class MockPoint:
     def __init__(self, *args, **kwargs):
@@ -56,7 +56,7 @@ def test_crawler_init(mock_ledger):
 def test_crawlBlockDo_yields_and_handles_tip(mock_ledger):
     crawler = crawling.Crawler(mock_ledger)
     crawler.ledger.client.find_intersection.execute.side_effect = lambda *a, **kw: (None, None, None)
-    crawler.ledger.client.query_block_height.execute.side_effect = lambda *a, **kw: (None, None)
+    crawler.ledger.client.query_block_height.execute.side_effect = lambda *a, **kw: (100, None)
 
     # Create a block that passes isinstance(block, ogmios.Block)
     block = crawling.ogmios.Block()
@@ -79,9 +79,15 @@ def test_crawlBlockDo_yields_and_handles_tip(mock_ledger):
     for _ in range(3):
         next(gen)  # run a few cycles
 
-    assert mock_ledger.updateTrans.called
+    expected_updateTrans_call = (
+        {'type': 'CARDANO_KEL', 'block_slot': 42, 'block_height': 100},
+        CardanoType.KEL
+    )
+    expected_states_pin_call = ('b_syncp', PointRecord(id='mock_block_id', slot=42))
+
+    mock_ledger.updateTrans.assert_called_with(*expected_updateTrans_call)
     mock_ledger.updateTip.assert_called_with(100)
-    assert mock_ledger.states.pin.called
+    mock_ledger.states.pin.assert_called_with(*expected_states_pin_call)
 
 def test_confirmTrans_calls_ledger_methods(mock_ledger):
     crawler = crawling.Crawler(mock_ledger)
