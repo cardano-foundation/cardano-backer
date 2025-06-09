@@ -14,6 +14,8 @@ RUN pip3 install -r requirements.txt
 
 COPY ./ ./
 
+RUN PYTHON_LIB_PATH=$(python3.13 -c "import ogmios.model.cardano_model as m; print(m.__file__)") && \
+    sed -i "/class Era2(Enum):/a \ \ \ \ conway = 'conway'" "$PYTHON_LIB_PATH"
 
 FROM base AS cardano-base
 ENV CONFIG_DIR /usr/local/var/keri
