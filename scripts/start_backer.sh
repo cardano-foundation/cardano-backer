@@ -41,4 +41,4 @@ kli init --name backer --nopasscode  --config-dir $CONFIG_DIR --config-file back
 
 kli incept --name backer --alias backer --config $CONFIG_DIR --file backer_cfg.json --base $STORE_DIR
 
-backer start --name backer  --alias backer -T $TPORT -H $PORT --ledger cardano --base $STORE_DIR --loglevel $BACKER_LOG_LEVEL
+backer start --name backer  --alias backer -T $TPORT -H $PORT --base $STORE_DIR --loglevel $BACKER_LOG_LEVEL

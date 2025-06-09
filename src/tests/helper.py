@@ -2,15 +2,15 @@ import os
 import time
 import subprocess
 import shutil
-import socket
 import falcon
 
 from pathlib import Path
 from falcon.testing import TestClient
 from keri import help
 from keri.app import habbing, keeping
-from backer import cardaning, queueing
+from backer import cardaning
 from keri.app.cli.common import existing
+from ogmios.client import Client
 
 logger = help.ogler.getLogger()
 
@@ -20,6 +20,7 @@ BACKER_TEST_PORT = 5668
 BACKER_TEST_TPORT = 5667
 WALLET_ADDRESS_CBORHEX = "5820339f8d1757c2c19ba62146d98400be157cdbbe149a4200bd9cc68ef457c201f8"
 
+DEVNET_OGMIOS_HOST = "localhost"
 DEVNET_OGMIOS_PORT = 1337
 DEVNET_PROCESS_PATH = ".yaci-cli/components/ogmios/bin/ogmios"
 START_SERVICE_TIMEOUT = 30
@@ -54,9 +55,11 @@ def set_test_env():
     os.environ["BACKER_TPORT"] = str(BACKER_TEST_TPORT)
     os.environ["BACKER_STORE_DIR"] = BACKER_TEST_STORE_DIR
     os.environ["WALLET_ADDRESS_CBORHEX"] = WALLET_ADDRESS_CBORHEX
+    os.environ["OGMIOS_HOST"] = DEVNET_OGMIOS_HOST
+    os.environ["OGMIOS_PORT"] = str(DEVNET_OGMIOS_PORT)
 
 class TestEnd:
-    def make_test_end(self, route, endclass, cues=None):
+    def make_test_end(self, route, endclass, cues=None, type=cardaning.CardanoType.KEL):
         set_test_env()
         name = "testbacker"
         bran = ""
@@ -76,16 +79,16 @@ class TestEnd:
         if hab is None:
             hab = hby.makeHab(name=alias, transferable=False)
 
-        ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
-        queue = queueing.Queueing(hab=hab, ledger=ledger)
+        ogmios_client = Client(DEVNET_OGMIOS_HOST, DEVNET_OGMIOS_PORT)
+        ledger = cardaning.Cardano(hab=hab, client=ogmios_client)
 
         app = falcon.App()
         client = TestClient(app)
 
         if cues:
-            endResource = endclass(hab=hab, queue=queue, cues=cues)
+            endResource = endclass(hab=hab, keldb_queued=ledger.keldb_queued, cues=cues) if type == cardaning.CardanoType.KEL else endclass(hab=hab, schemadb_queued=ledger.schemadb_queued, cues=cues)
         else:
-            endResource = endclass(hab=hab, queue=queue)
+            endResource = endclass(hab=hab, keldb_queued=ledger.keldb_queued) if type == cardaning.CardanoType.KEL else endclass(hab=hab, schemadb_queued=ledger.schemadb_queued)
 
         app.add_route(route, endResource)
 

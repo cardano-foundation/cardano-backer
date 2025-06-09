@@ -4,13 +4,15 @@ src.tests.test_onchain_confirmation module
 
 """
 import logging
-import time
+import os
 import json
 from keri import help
 from keri.app import habbing
 from keri.core import eventing, serdering, Salter, scheming
-from backer import cardaning, queueing
+from backer import cardaning
 from tests.helper import TestBase
+from ogmios.client import Client
+from tests.helper import DEVNET_OGMIOS_HOST, DEVNET_OGMIOS_PORT
 
 TRANSACTION_SECURITY_DEPTH = 16
 TRANSACTION_TIMEOUT_DEPTH = 32
@@ -23,7 +25,7 @@ class TestUtxos(TestBase):
         salt = b"0123456789abcdef"
         salter = Salter(raw=salt)
 
-        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby:
+        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby, Client(DEVNET_OGMIOS_HOST, DEVNET_OGMIOS_PORT) as client:
             hab = hby.makeHab("test03", transferable=False)
             icp = {
                 "v": "KERI10JSON00012b_",
@@ -43,10 +45,9 @@ class TestUtxos(TestBase):
 
             serder = serdering.SerderKERI(sad=icp, kind=eventing.Kinds.json)
             msg = serder.raw
-            ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+            ledger = cardaning.Cardano(hab=hab, client=client)
             ledger.keldb_queued.trim()
-            queue = queueing.Queueing(hab=hab, ledger=ledger)
-            queue.pushToQueued(serder.pre, msg)
+            ledger.keldb_queued.pin(keys=(serder.pre, serder.said), val=msg)
             cardaning.TRANSACTION_SECURITY_DEPTH = TRANSACTION_SECURITY_DEPTH
             cardaning.TRANSACTION_TIMEOUT_DEPTH = TRANSACTION_TIMEOUT_DEPTH
 
@@ -151,7 +152,7 @@ class TestUtxos(TestBase):
         salt = b"0123456789abcdef"
         salter = Salter(raw=salt)
 
-        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby:
+        with habbing.openHby(name="test", salt=salter.qb64, temp=True) as hby, Client(DEVNET_OGMIOS_HOST, DEVNET_OGMIOS_PORT) as client:
             hab = hby.makeHab("test03", transferable=False)
             schema = {
                 "$id": "EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdcczw",
@@ -173,10 +174,12 @@ class TestUtxos(TestBase):
 
             schemer = scheming.Schemer(raw=json.dumps(schema).encode('utf-8'))
             msg = schemer.raw
-            ledger = cardaning.Cardano(hab=hab, ks=hab.ks)
+            
+            ledger = cardaning.Cardano(hab=hab, client=client)
             ledger.keldb_queued.trim()
-            queue = queueing.Queueing(hab=hab, ledger=ledger)
-            queue.pushToQueued("", msg, cardaning.CardanoType.SCHEMA)
+            ledger.schemadb_queued.trim()
+            ledger.schemadb_queued.pin(keys=(schemer.said, ), val=msg)
+
             cardaning.TRANSACTION_SECURITY_DEPTH = TRANSACTION_SECURITY_DEPTH
             cardaning.TRANSACTION_TIMEOUT_DEPTH = TRANSACTION_TIMEOUT_DEPTH
 
