@@ -1,16 +1,14 @@
 # -*- encoding: utf-8 -*-
 """
-KERI
-keri.ledger.cardaning module
+Cardano Backer
+backer.cardaning module
 
-Registrar Backer operations on Cardano Ledger
-
+Cardano specific helper class for writing KELs or schemas on-chain reliably using Ogmios
 """
 from enum import Enum
 import json
 import pycardano
 import os
-import ogmios
 from dataclasses import dataclass
 from keri import help
 from keri.db import subing, koming
@@ -20,41 +18,31 @@ from backer.persistentogmiosing import PersistentOgmiosV6ChainContext
 
 logger = help.ogler.getLogger()
 
-QUEUE_DURATION = int(os.environ.get('QUEUE_DURATION', 60))
-NETWORK_NAME = os.environ.get('NETWORK') if os.environ.get('NETWORK') else 'preview'
 NETWORK = pycardano.Network.MAINNET if os.environ.get('NETWORK') == 'mainnet' else pycardano.Network.TESTNET
-MINIMUN_BALANCE = int(os.environ.get('MINIMUN_BALANCE', 5000000))
-TRANSACTION_AMOUNT = int(os.environ.get('TRANSACTION_AMOUNT', 1000000))
-MIN_BLOCK_CONFIRMATIONS = int(os.environ.get('MIN_BLOCK_CONFIRMATIONS', 3))
 TRANSACTION_SECURITY_DEPTH = int(os.environ.get('TRANSACTION_SECURITY_DEPTH', 16))
 TRANSACTION_TIMEOUT_DEPTH = int(os.environ.get('TRANSACTION_TIMEOUT_DEPTH', 32))
 MAX_TRANSACTION_SIZE = 16384
 MAX_TRANSACTION_SIZE_MARGIN = 3  # Can be small variations in tx size between PyCardano and Ogmios serialization
-OGMIOS_HOST = os.environ.get('OGMIOS_HOST', 'localhost')
-OGMIOS_PORT = int(os.environ.get('OGMIOS_PORT', 1337))
-BACKER_STATE_DB = 'bstt.'
-CURRENT_SYNC_POINT = 'b_syncp'
 
 
-class CardanoType(Enum):
+class TransactionType(Enum):
     SCHEMA = "CARDANO_SCHEMA"
     KEL = "CARDANO_KEL"
 
 
-class CardanoDBType(Enum):
-    QUEUED = "QUEUED"
-    PUBLISHED = "PUBLISHED"
-    CONFIRMING = "CONFIRMING"
-
-
-class CardanoDBName(Enum):
-    KEL_QUEUED = "kel_queued"
-    KEL_PUBLISHED = "kel_published"
-    KEL_CONFIRMING = "kel_confirming"
-    SCHEMA_QUEUED = "schemadb_queued"
-    SCHEMA_PUBLISHED = "schemadb_published"
-    SCHEMA_CONFIRMING = "schemadb_confirming"
+class CardanoSuberKey(Enum):
+    KELS_QUEUED = "kels_queued"
+    KELS_PUBLISHED = "kels_published"
+    KELS_CONFIRMING = "kels_confirming"
+    SCHEMAS_QUEUED = "schemas_queued"
+    SCHEMAS_PUBLISHED = "schemas_published"
+    SCHEMAS_CONFIRMING = "schemas_confirming"
     CONFIRMING_UTXOS = "confirming_utxo"
+
+
+class CardanoKomerKey(Enum):
+    BACKER_STATE_DB = 'bstt.'
+    CURRENT_SYNC_POINT = 'b_syncp'
 
 
 @dataclass
@@ -64,282 +52,216 @@ class PointRecord:
 
 
 class Cardano:
-    """
-    Environment variables required:
-        - WALLET_ADDRESS_CBORHEX = Private Key of funding address as CBOR Hex. Must be an Enterprice address (no Staking part) as PaymentSigningKeyShelley_ed25519
-
-    Additional libraries required:
-        pip install pycardano ogmios
-    See Backer designation event: https://github.com/WebOfTrust/keripy/issues/90
-
-    Features:
-        - Cardano Address is derived from the same Ed25519 seed (private key) used to derive the prefix of the backer
-        - Anchoring KELs from multiple prefixes
-        - Queue events during a period of time to allow several block confirmations as a safety meassure
-        - Optional funding address to fund the backer address
-    """
 
     def __init__(self, hab, client):
         self.hab = hab
         self.client = client
 
         self.onTip = False
-        self.pending_kel = []
+        self.tipHeight = 0
 
-        self.keldb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_QUEUED.value)
-        self.keldb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_PUBLISHED.value)
-        self.keldbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.KEL_CONFIRMING.value)
+        # @TODO - foconnor: Most of this class should be subclassed into KELs and schemas
+        #   to avoid the if else statements everywhere.
+        self.kelsQueued = subing.Suber(db=hab.db, subkey=CardanoSuberKey.KELS_QUEUED.value)
+        self.kelsPublished = subing.Suber(db=hab.db, subkey=CardanoSuberKey.KELS_PUBLISHED.value)
+        self.kelsConfirming = subing.Suber(db=hab.db, subkey=CardanoSuberKey.KELS_CONFIRMING.value)
 
-        self.schemadb_queued = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_QUEUED.value)
-        self.schemadb_published = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_PUBLISHED.value)
-        self.schemadbConfirming = subing.Suber(db=hab.db, subkey=CardanoDBName.SCHEMA_CONFIRMING.value)
+        self.schemasQueued = subing.Suber(db=hab.db, subkey=CardanoSuberKey.SCHEMAS_QUEUED.value)
+        self.schemasPublished = subing.Suber(db=hab.db, subkey=CardanoSuberKey.SCHEMAS_PUBLISHED.value)
+        self.schemasConfirming = subing.Suber(db=hab.db, subkey=CardanoSuberKey.SCHEMAS_CONFIRMING.value)
 
-        self.dbConfirmingUtxos = subing.DupSuber(db=hab.db, subkey=CardanoDBName.CONFIRMING_UTXOS.value)
+        self.dbConfirmingUtxos = subing.DupSuber(db=hab.db, subkey=CardanoSuberKey.CONFIRMING_UTXOS.value)
 
         self.states = koming.Komer(db=hab.db,
                                    schema=PointRecord,
-                                   subkey=BACKER_STATE_DB)
+                                   subkey=CardanoKomerKey.BACKER_STATE_DB.value)
 
+        # Host/port both not needed as client is passed through
+        # Better to keep as dummy strings to make it obvious when new functions are being used and need to be overridden
         self.context = PersistentOgmiosV6ChainContext(
             client=self.client,
-            host=OGMIOS_HOST,
-            port=OGMIOS_PORT,
+            host="dummyhost",
+            port="dummyport",
             network=NETWORK
         )
-        self.tipHeight = 0
 
-        self.payment_signing_key = pycardano.PaymentSigningKey.from_cbor(os.environ.get('WALLET_ADDRESS_CBORHEX'))
-        payment_verification_key = pycardano.PaymentVerificationKey.from_signing_key(self.payment_signing_key)
-        self.spending_addr = pycardano.Address(payment_verification_key.hash(), None, network=NETWORK)
+        self.paymentSigningKey = pycardano.PaymentSigningKey.from_cbor(os.environ.get('WALLET_ADDRESS_CBORHEX'))
+        paymentVerificationKey = pycardano.PaymentVerificationKey.from_signing_key(self.paymentSigningKey)
+        self.spending_addr = pycardano.Address(paymentVerificationKey.hash(), None, network=NETWORK)
         logger.info(f"Cardano Backer Spending Address: {self.spending_addr.encode()}")
-
-        balance = self.getAddressBalance(self.spending_addr.encode())
-        if balance and balance > MINIMUN_BALANCE:
-            logger.info(f"Address balance: {balance/1000000} ADA")
-        else:
-            logger.critical("The wallet is empty or insufficient balance detected")
-            exit(1)
-
-    def getCardanoDB(self, type, name):
-            if type == CardanoType.SCHEMA:
-                if name == CardanoDBType.QUEUED:
-                    return self.schemadb_queued
-                elif name == CardanoDBType.PUBLISHED:
-                    return self.schemadb_published
-                elif name == CardanoDBType.CONFIRMING:
-                    return self.schemadbConfirming
-            else:
-                if name == CardanoDBType.QUEUED:
-                    return self.keldb_queued
-                elif name == CardanoDBType.PUBLISHED:
-                    return self.keldb_published
-                elif name == CardanoDBType.CONFIRMING:
-                    return self.keldbConfirming
 
     def updateTip(self, tipHeight):
         self.tipHeight = tipHeight
 
-    def addToQueue(self, event, type:CardanoType):
-        if type == CardanoType.SCHEMA:
+    def _addToQueue(self, event, txType: TransactionType):
+        if txType == TransactionType.SCHEMA:
             schemer = scheming.Schemer(raw=event)
-            self.schemadb_queued.pin(keys=(schemer.said, ), val=event)
+            self.schemasQueued.pin(keys=(schemer.said,), val=event)
         else:
             serder = serdering.SerderKERI(raw=event)
-            self.keldb_queued.pin(keys=(serder.pre, serder.said), val=event)
+            self.kelsQueued.pin(keys=(serder.pre, serder.said), val=event)
 
-    def removeFromQueue(self, event, type:CardanoType):
-        if type == CardanoType.SCHEMA:
+    def _removeFromQueue(self, event, txType: TransactionType):
+        if txType == TransactionType.SCHEMA:
             schemer = scheming.Schemer(raw=event)
-            self.schemadb_queued.rem(keys=(schemer.said, ))
+            self.schemasQueued.rem(keys=(schemer.said,))
         else:
             serder = serdering.SerderKERI(raw=event)
-            keys=(serder.pre, serder.said)
-            self.keldb_queued.rem(keys=keys)
+            self.kelsQueued.rem(keys=(serder.pre, serder.said))
 
-    def addToPublished(self, event, type:CardanoType):
-        if type == CardanoType.SCHEMA:
+    def _addToPublished(self, event, txType: TransactionType):
+        if txType == TransactionType.SCHEMA:
             schemer = scheming.Schemer(raw=event)
-            self.schemadb_published.pin(keys=(schemer.said, ), val=event)
+            self.schemasPublished.pin(keys=(schemer.said,), val=event)
         else:
             serder = serdering.SerderKERI(raw=event)
-            self.keldb_published.pin(keys=(serder.pre, serder.said), val=event)
+            self.kelsPublished.pin(keys=(serder.pre, serder.said), val=event)
 
-    def selectUTXO(self):
-        # TODO: We need more advanced UTXO selection in the future.
-        # For now, it just selects one and assumes it'll have enough.
-        # Deployments should fund the address with 1 or X UTXOs of sufficient size.
+    def selectAvailableUTXOs(self):
+        def txIsConfirming(utxo):
+            utxoId = f"{utxo.input.transaction_id}#{utxo.input.index}"
+            for _, confirmingUtxoId in self.dbConfirmingUtxos.getItemIter():
+                if confirmingUtxoId == utxoId:
+                    return True
+
+            return False
+
+        # @TODO: We need more advanced UTXO selection in the future.
+        #   For now, it just selects one and assumes it'll have enough.
+        #   Deployments should fund the address with 1 or X UTXOs of sufficient size.
 
         # Select the first utxo from spending address
         utxos = self.context.utxos(self.spending_addr)
 
         for utxo in utxos:
-            if not self.isInConfirmingUTxO(utxo):
+            if not txIsConfirming(utxo):
                 return [utxo]
 
         return []
 
-    def publishEvents(self, type:CardanoType):
-        eventNumber = self.hab.db.cnt(self.keldb_queued.sdb) if type == CardanoType.KEL else self.hab.db.cnt(self.schemadb_queued.sdb)
-
-        if eventNumber < 1:
+    def publishEvents(self, txType: TransactionType):
+        if not self.onTip:
             return
 
-        keri_data = bytearray()
-        submitting_items = []
-        submitting_tx_cbor = None
-        temp_tx_cbor = None
+        queue = self.kelsQueued if txType == TransactionType.KEL else self.schemasQueued
+        confirmingTxs = self.kelsConfirming if txType == TransactionType.KEL else self.schemasConfirming
 
-        utxos = self.selectUTXO()
+        # Skip setup nothing queued
+        if self.hab.db.cnt(queue.sdb) < 1:
+            return
 
+        utxos = self.selectAvailableUTXOs()
         if len(utxos) < 1:
             logger.critical("ERROR: No UTXO available")
             return
 
-        db_queued = self.getCardanoDB(type, CardanoDBType.QUEUED)
-        dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
+        metadataLabel = METADATUM_LABEL_KEL if txType == TransactionType.KEL else METADATUM_LABEL_SCHEMA
+        metadataBody = bytearray()
 
-        for _, event in reversed(list(db_queued.getItemIter())):
-            # Build transaction
+        eventsInBatch = []
+        signedTx = None
+
+        for _, event in reversed(list(queue.getItemIter())):
+            metadataBody += event.encode('utf-8')
+
+            # Chunk size - bytearrays is not accept
+            metadataBodyBytes = bytes(metadataBody)
+            value = [metadataBodyBytes[i:i + 64] for i in range(0, len(metadataBodyBytes), 64)]
+
             builder = pycardano.TransactionBuilder(self.context)
-
             for utxo in utxos:
                 builder.add_input(utxo)
+            builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([1000000])))
 
-            builder.add_output(pycardano.TransactionOutput(self.spending_addr, pycardano.Value.from_primitive([TRANSACTION_AMOUNT])))
-            keri_data = keri_data + event.encode('utf-8')
-            keri_data_bytes = bytes(keri_data)
-
-            # Chunk size
-            # bytearrays is not accept
-            value = [keri_data_bytes[i:i + 64] for i in range(0, len(keri_data_bytes), 64)]
-
-            # Metadata. accept int key type
-            metadatumLabel = METADATUM_LABEL_KEL if type == CardanoType.KEL else METADATUM_LABEL_SCHEMA
-            builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({metadatumLabel: value}))
+            # Metadata accept int key type
+            builder.auxiliary_data = pycardano.AuxiliaryData(pycardano.Metadata({metadataLabel: value}))
             try:
-                signed_tx = builder.build_and_sign([self.payment_signing_key],
-                                                   change_address=self.spending_addr,
-                                                   merge_change=True)
+                signedTx = builder.build_and_sign([self.paymentSigningKey],
+                                                  change_address=self.spending_addr,
+                                                  merge_change=True)
 
-                if len(signed_tx.to_cbor()) > MAX_TRANSACTION_SIZE - MAX_TRANSACTION_SIZE_MARGIN:
+                if len(signedTx.to_cbor()) > MAX_TRANSACTION_SIZE - MAX_TRANSACTION_SIZE_MARGIN:
                     break
 
-                temp_tx_cbor = signed_tx.to_cbor()
+                eventsInBatch.append(event)
             except pycardano.exception.InvalidTransactionException as e:
                 if "exceeds the max limit" in str(e):
                     break
+                else:
+                    raise e
 
-            submitting_tx_cbor = bytes(temp_tx_cbor)
-            submitting_items.append(event)
-
-        if not submitting_tx_cbor:
+        if not signedTx:
             return
 
-        transId = str(signed_tx.id)
-        submitting_trans = {
-            "id": transId,
-            "type": type.value,
-            "keri_raw": submitting_items,
+        signedTxMetadata = {
+            "id": str(signedTx.id),
+            "type": txType.value,
+            "batch": eventsInBatch,
             "tip": self.tipHeight,
         }
         utxoIds = [f"{str(utxo.input.transaction_id)}#{utxo.input.index}" for utxo in utxos]
 
-        dbConfirming.pin(keys=submitting_trans["id"], val=json.dumps(submitting_trans).encode('utf-8'))
-        self.dbConfirmingUtxos.pin(keys=submitting_trans["id"], vals=utxoIds)
+        confirmingTxs.pin(keys=signedTxMetadata["id"], val=json.dumps(signedTxMetadata).encode('utf-8'))
+        self.dbConfirmingUtxos.pin(keys=signedTxMetadata["id"], vals=utxoIds)
 
         # Submit transaction
         try:
-            self.context.submit_tx_cbor(submitting_tx_cbor)
-
-            # Remove submitted events from queue and add them into published
-            for event in submitting_items:
-                event = event.encode('utf-8')
-                self.addToPublished(event, type)
-                self.removeFromQueue(event, type)
-
-            logger.info(f"Submitted tx: {submitting_trans}")
+            self.context.submit_tx_cbor(bytes(signedTx.to_cbor()))
+            logger.info(f"Submitted tx: {signedTxMetadata}")
         except Exception as e:
             logger.critical(f"ERROR: Submit tx: {e}")
-            # Add back to queue
-            for keri_item in submitting_trans['keri_raw']:
-                self.addToQueue(keri_item.encode('utf-8'), type)
 
             # Remove from confirming
-            self.dbConfirmingUtxos.rem(keys=submitting_trans["id"])
-            dbConfirming.rem(submitting_trans["id"])
+            self.dbConfirmingUtxos.rem(keys=signedTxMetadata["id"])
+            confirmingTxs.rem(signedTxMetadata["id"])
 
-    def getConfirmingTrans(self, transId):
-        tx = self.schemadbConfirming.get(transId)
+        # Mark submitted events as published and remove from queue
+        for event in eventsInBatch:
+            event = event.encode('utf-8')
+            self._addToPublished(event, txType)
+            self._removeFromQueue(event, txType)
 
-        if not tx:
-            tx = self.keldbConfirming.get(transId)
+    def getConfirmingTx(self, txId):
+        return self.kelsConfirming.get(txId) or self.schemasConfirming.get(txId)
 
-        return tx
+    def rollbackToSlot(self, slot, txType: TransactionType):
+        confirmingTxs = self.kelsConfirming if txType == TransactionType.KEL else self.schemasConfirming
+        for keys, tx in confirmingTxs.getItemIter():
+            tx = json.loads(tx)
+            if "block_slot" not in tx:  # Hasn't appeared on-chain yet
+                return
 
-    def rollbackBlock(self, rollBackSlot, type:CardanoType):
-        try:
-            dbConfirming = self.getCardanoDB(type, CardanoDBType.CONFIRMING)
-            for keys, item in dbConfirming.getItemIter():
-                if item is None:
-                    continue
+            if tx["block_slot"] > slot:
+                # Forget we saw it and re-schedule events
+                for event in tx["batch"]:
+                    self._addToQueue(event.encode('utf-8'), txType)
 
-                item = json.loads(item)
-                blockSlot = item["block_slot"]
+                self.dbConfirmingUtxos.rem(keys)
+                confirmingTxs.rem(keys)
 
-                if blockSlot > rollBackSlot:
-                    # Push back to pending KEL to resubmit
-                    for keri_item in item['keri_raw']:
-                        self.addToQueue(keri_item.encode('utf-8'), type=type)
+    def confirmOrTimeoutDeepTxs(self, txType: TransactionType):
+        if not self.onTip:
+            return
 
-                    dbConfirming.rem(keys)
-        except Exception as e:
-            logger.critical(f"Cannot rollback transaction: {e}")
-
-    def isInConfirmingUTxO(self, utxo):
-        utxoId = f"{utxo.input.transaction_id}#{utxo.input.index}"
-
-        for _, confirmingUtxoId in self.dbConfirmingUtxos.getItemIter():
-            if confirmingUtxoId == utxoId:
-                return True
-
-        return False
-
-    def confirmTrans(self, txType: CardanoType):
-        dbConfirming = self.getCardanoDB(txType, CardanoDBType.CONFIRMING)
-        for keys, item in dbConfirming.getItemIter():
-            if item is None:
-                continue
-
-            item = json.loads(item)
-            transTip = int(item["tip"])
-            blockHeight = int(item["block_height"]) if 'block_height' in item.keys() else 0
+        confirmingTxs = self.kelsConfirming if txType == TransactionType.KEL else self.schemasConfirming
+        for keys, tx in confirmingTxs.getItemIter():
+            tx = json.loads(tx)
+            blockHeight = int(tx["block_height"]) if "block_height" in tx.keys() else 0
 
             # Check for confirmation
-            if self.tipHeight > 0 and blockHeight > 0 and self.tipHeight - blockHeight >= TRANSACTION_SECURITY_DEPTH:
-                dbConfirming.rem(keys)
+            if blockHeight > 0 and self.tipHeight - blockHeight >= TRANSACTION_SECURITY_DEPTH:
                 self.dbConfirmingUtxos.rem(keys)
+                confirmingTxs.rem(keys)
                 continue
 
-            if self.tipHeight - transTip > TRANSACTION_TIMEOUT_DEPTH:
-                for keri_item in item['keri_raw']:
-                    self.addToQueue(keri_item.encode('utf-8'), txType)
+            # Check for timeout (not appearing - maybe fork)
+            if self.tipHeight - int(tx["tip"]) >= TRANSACTION_TIMEOUT_DEPTH:
+                for event in tx["batch"]:
+                    self._addToQueue(event.encode('utf-8'), txType)
 
-                dbConfirming.rem(keys)
                 self.dbConfirmingUtxos.rem(keys)
+                confirmingTxs.rem(keys)
 
-    def updateTrans(self, trans, txType: CardanoType):
-        transId = trans['id']
-        dbConfirming = self.getCardanoDB(txType, CardanoDBType.CONFIRMING)
-        dbConfirming.pin(keys=transId, val=json.dumps(trans).encode('utf-8'))
-
-    def getAddressBalance(self, addr):
-        try:
-            utxo_list = self.client.query_utxo.execute([ogmios.Address(addr)])
-
-            if utxo_list and len(utxo_list[0]) > 0:
-                utxo = utxo_list[0][0]
-                return int(utxo.value['ada']['lovelace'])
-        except Exception as e:
-            logger.critical(f"Cannot get address's balance: {e}")
-
-        return 0
+    def updateConfirmingTxMetadata(self, tx, txType: TransactionType):
+        confirmingTxs = self.kelsConfirming if txType == TransactionType.KEL else self.schemasConfirming
+        confirmingTxs.pin(keys=tx['id'], val=json.dumps(tx).encode('utf-8'))

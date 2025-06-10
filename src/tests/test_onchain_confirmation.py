@@ -45,8 +45,8 @@ class TestUtxos(TestBase):
             serder = serdering.SerderKERI(sad=icp, kind=eventing.Kinds.json)
             msg = serder.raw
             ledger = cardaning.Cardano(hab=hab, client=client)
-            ledger.keldb_queued.trim()
-            ledger.keldb_queued.pin(keys=(serder.pre, serder.said), val=msg)
+            ledger.kelsQueued.trim()
+            ledger.kelsQueued.pin(keys=(serder.pre, serder.said), val=msg)
             cardaning.TRANSACTION_SECURITY_DEPTH = TRANSACTION_SECURITY_DEPTH
             cardaning.TRANSACTION_TIMEOUT_DEPTH = TRANSACTION_TIMEOUT_DEPTH
 
@@ -55,20 +55,21 @@ class TestUtxos(TestBase):
             tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH - 1
 
             # Submit event
+            ledger.onTip = True
             ledger.updateTip(tipHeight - 1)
 
-            selected_utxo = ledger.selectUTXO()
+            selected_utxo = ledger.selectAvailableUTXOs()
 
-            ledger.publishEvents(type=cardaning.CardanoType.KEL)
+            ledger.publishEvents(txType=cardaning.TransactionType.KEL)
             trans = None
 
-            for keys, item in ledger.keldbConfirming.getItemIter():
+            for keys, item in ledger.kelsConfirming.getItemIter():
                 if item is None:
                     continue
 
                 trans = json.loads(item)
 
-            assert trans['keri_raw'] == [msg.decode('utf-8')]
+            assert trans["batch"] == [msg.decode('utf-8')]
 
             transId = trans['id']
 
@@ -80,9 +81,9 @@ class TestUtxos(TestBase):
 
             ledger.updateTip(tipHeight)
             trans['block_height'] = blockHeight
-            ledger.updateTrans(trans, txType=cardaning.CardanoType.KEL)
-            ledger.confirmTrans(txType=cardaning.CardanoType.KEL)
-            confirmingTrans = ledger.getConfirmingTrans(transId)
+            ledger.updateConfirmingTxMetadata(trans, txType=cardaning.TransactionType.KEL)
+            ledger.confirmOrTimeoutDeepTxs(txType=cardaning.TransactionType.KEL)
+            confirmingTrans = ledger.getConfirmingTx(transId)
             assert confirmingTrans != None
 
 
@@ -91,17 +92,17 @@ class TestUtxos(TestBase):
             ledger.updateTip(tipHeight)
             trans['tip'] = tipHeight - TRANSACTION_TIMEOUT_DEPTH - 1
             trans['block_height'] = blockHeight
-            ledger.updateTrans(trans, txType=cardaning.CardanoType.KEL)
-            ledger.confirmTrans(txType=cardaning.CardanoType.KEL)
+            ledger.updateConfirmingTxMetadata(trans, txType=cardaning.TransactionType.KEL)
+            ledger.confirmOrTimeoutDeepTxs(txType=cardaning.TransactionType.KEL)
             cls.wait_for_updating_utxo()
 
-            ledger.publishEvents(type=cardaning.CardanoType.KEL)
+            ledger.publishEvents(txType=cardaning.TransactionType.KEL)
 
-            confirmingTrans = ledger.getConfirmingTrans(transId)
+            confirmingTrans = ledger.getConfirmingTx(transId)
             newTrans = None
 
             # Load new trans
-            for keys, item in ledger.keldbConfirming.getItemIter():
+            for keys, item in ledger.kelsConfirming.getItemIter():
                 if item is None:
                     continue
 
@@ -117,16 +118,16 @@ class TestUtxos(TestBase):
             ledger.updateTip(tipHeight)
             newTrans['block_height'] = blockHeight
             newTrans['block_slot'] = tipHeight - 1
-            ledger.updateTrans(newTrans, txType=cardaning.CardanoType.KEL)
+            ledger.updateConfirmingTxMetadata(newTrans, txType=cardaning.TransactionType.KEL)
             ledger.updateTip(tipHeight - 1)
-            ledger.rollbackBlock((tipHeight - 2), type=cardaning.CardanoType.KEL)
-            oldTrans = ledger.getConfirmingTrans(newTransId)
+            ledger.rollbackToSlot((tipHeight - 2), txType=cardaning.TransactionType.KEL)
+            oldTrans = ledger.getConfirmingTx(newTransId)
             cls.wait_for_updating_utxo()
-            ledger.publishEvents(type=cardaning.CardanoType.KEL)
-            ledger.confirmTrans(txType=cardaning.CardanoType.KEL)
+            ledger.publishEvents(txType=cardaning.TransactionType.KEL)
+            ledger.confirmOrTimeoutDeepTxs(txType=cardaning.TransactionType.KEL)
 
             # Load new trans
-            for keys, item in ledger.keldbConfirming.getItemIter():
+            for keys, item in ledger.kelsConfirming.getItemIter():
                 if item is None:
                     continue
 
@@ -141,9 +142,9 @@ class TestUtxos(TestBase):
             tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH
             ledger.updateTip(tipHeight)
             latestTrans['block_height'] = blockHeight
-            ledger.updateTrans(latestTrans, txType=cardaning.CardanoType.KEL)
-            ledger.confirmTrans(txType=cardaning.CardanoType.KEL)
-            confirmingTrans = ledger.getConfirmingTrans(latestTrans['id'])
+            ledger.updateConfirmingTxMetadata(latestTrans, txType=cardaning.TransactionType.KEL)
+            ledger.confirmOrTimeoutDeepTxs(txType=cardaning.TransactionType.KEL)
+            confirmingTrans = ledger.getConfirmingTx(latestTrans['id'])
             assert confirmingTrans == None
 
     def test_schema_confirmation(cls):
@@ -175,9 +176,9 @@ class TestUtxos(TestBase):
             msg = schemer.raw
             
             ledger = cardaning.Cardano(hab=hab, client=client)
-            ledger.keldb_queued.trim()
-            ledger.schemadb_queued.trim()
-            ledger.schemadb_queued.pin(keys=(schemer.said, ), val=msg)
+            ledger.kelsQueued.trim()
+            ledger.schemasQueued.trim()
+            ledger.schemasQueued.pin(keys=(schemer.said,), val=msg)
 
             cardaning.TRANSACTION_SECURITY_DEPTH = TRANSACTION_SECURITY_DEPTH
             cardaning.TRANSACTION_TIMEOUT_DEPTH = TRANSACTION_TIMEOUT_DEPTH
@@ -187,25 +188,26 @@ class TestUtxos(TestBase):
             tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH - 1
 
             # Submit event
+            ledger.onTip = True
             ledger.updateTip(tipHeight - 1)
             cls.wait_for_updating_utxo()
-            ledger.publishEvents(type=cardaning.CardanoType.SCHEMA)
+            ledger.publishEvents(txType=cardaning.TransactionType.SCHEMA)
             trans = None
 
-            for keys, item in ledger.schemadbConfirming.getItemIter():
+            for keys, item in ledger.schemasConfirming.getItemIter():
                 if item is None:
                     continue
 
                 trans = json.loads(item)
 
-            assert trans['keri_raw'] == [msg.decode('utf-8')]
+            assert trans["batch"] == [msg.decode('utf-8')]
 
             transId = trans['id']
             ledger.updateTip(tipHeight)
             trans['block_height'] = blockHeight
-            ledger.updateTrans(trans, cardaning.CardanoType.SCHEMA)
-            ledger.confirmTrans(txType=cardaning.CardanoType.SCHEMA)
-            confirmingTrans = ledger.getConfirmingTrans(transId)
+            ledger.updateConfirmingTxMetadata(trans, cardaning.TransactionType.SCHEMA)
+            ledger.confirmOrTimeoutDeepTxs(txType=cardaning.TransactionType.SCHEMA)
+            confirmingTrans = ledger.getConfirmingTx(transId)
             assert confirmingTrans != None
 
 
@@ -214,16 +216,16 @@ class TestUtxos(TestBase):
             ledger.updateTip(tipHeight)
             trans['tip'] = tipHeight - TRANSACTION_TIMEOUT_DEPTH - 1
             trans['block_height'] = blockHeight
-            ledger.updateTrans(trans, txType=cardaning.CardanoType.SCHEMA)
-            ledger.confirmTrans(txType=cardaning.CardanoType.SCHEMA)
+            ledger.updateConfirmingTxMetadata(trans, txType=cardaning.TransactionType.SCHEMA)
+            ledger.confirmOrTimeoutDeepTxs(txType=cardaning.TransactionType.SCHEMA)
             cls.wait_for_updating_utxo()
-            ledger.publishEvents(type=cardaning.CardanoType.SCHEMA)
+            ledger.publishEvents(txType=cardaning.TransactionType.SCHEMA)
 
-            confirmingTrans = ledger.getConfirmingTrans(transId)
+            confirmingTrans = ledger.getConfirmingTx(transId)
             newTrans = None
 
             # Load new trans
-            for keys, item in ledger.schemadbConfirming.getItemIter():
+            for keys, item in ledger.schemasConfirming.getItemIter():
                 if item is None:
                     continue
 
@@ -239,16 +241,16 @@ class TestUtxos(TestBase):
             ledger.updateTip(tipHeight)
             newTrans['block_height'] = blockHeight
             newTrans['block_slot'] = tipHeight - 1
-            ledger.updateTrans(newTrans, txType=cardaning.CardanoType.SCHEMA)
+            ledger.updateConfirmingTxMetadata(newTrans, txType=cardaning.TransactionType.SCHEMA)
             ledger.updateTip(tipHeight - 1)
-            ledger.rollbackBlock((tipHeight - 2), type=cardaning.CardanoType.SCHEMA)
-            oldTrans = ledger.getConfirmingTrans(newTransId)
+            ledger.rollbackToSlot((tipHeight - 2), txType=cardaning.TransactionType.SCHEMA)
+            oldTrans = ledger.getConfirmingTx(newTransId)
             cls.wait_for_updating_utxo()
-            ledger.publishEvents(type=cardaning.CardanoType.SCHEMA)
-            ledger.confirmTrans(txType=cardaning.CardanoType.SCHEMA)
+            ledger.publishEvents(txType=cardaning.TransactionType.SCHEMA)
+            ledger.confirmOrTimeoutDeepTxs(txType=cardaning.TransactionType.SCHEMA)
 
             # Load new trans
-            for keys, item in ledger.schemadbConfirming.getItemIter():
+            for keys, item in ledger.schemasConfirming.getItemIter():
                 if item is None:
                     continue
 
@@ -263,7 +265,7 @@ class TestUtxos(TestBase):
             tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH
             ledger.updateTip(tipHeight)
             latestTrans['block_height'] = blockHeight
-            ledger.updateTrans(latestTrans, txType=cardaning.CardanoType.SCHEMA)
-            ledger.confirmTrans(txType=cardaning.CardanoType.SCHEMA)
-            confirmingTrans = ledger.getConfirmingTrans(latestTrans['id'])
+            ledger.updateConfirmingTxMetadata(latestTrans, txType=cardaning.TransactionType.SCHEMA)
+            ledger.confirmOrTimeoutDeepTxs(txType=cardaning.TransactionType.SCHEMA)
+            confirmingTrans = ledger.getConfirmingTx(latestTrans['id'])
             assert confirmingTrans == None

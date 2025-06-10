@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import backer.crawling as crawling
 import ogmios
-from backer.cardaning import CardanoType, PointRecord
+from backer.cardaning import TransactionType, PointRecord
 
 class MockPoint:
     def __init__(self, *args, **kwargs):
@@ -28,7 +28,6 @@ def mock_ledger():
     ledger.updateTrans = MagicMock()
     ledger.updateTip = MagicMock()
     ledger.rollbackBlock = MagicMock()
-    ledger.confirmTrans = MagicMock()
     return ledger
 
 @pytest.fixture(autouse=True)
@@ -53,7 +52,7 @@ def test_crawler_init(mock_ledger):
     assert isinstance(crawler, crawling.Crawler)
     assert crawler.ledger == mock_ledger
 
-def test_crawlBlockDo_yields_and_handles_tip(mock_ledger):
+def test_recur_yields_and_handles_tip(mock_ledger):
     crawler = crawling.Crawler(mock_ledger)
     crawler.ledger.client.find_intersection.execute.side_effect = lambda *a, **kw: (None, None, None)
     crawler.ledger.client.query_block_height.execute.side_effect = lambda *a, **kw: (100, None)
@@ -72,32 +71,24 @@ def test_crawlBlockDo_yields_and_handles_tip(mock_ledger):
         block,
         None
     )
-    mock_ledger.getConfirmingTrans.return_value = '{"type": "CARDANO_KEL"}'
+    mock_ledger.getConfirmingTx.return_value = '{"type": "CARDANO_KEL"}'
 
-    gen = crawler.crawlBlockDo()
+    gen = crawler.recur()
     next(gen)  # prime generator
     for _ in range(3):
         next(gen)  # run a few cycles
 
     expected_updateTrans_call = (
         {'type': 'CARDANO_KEL', 'block_slot': 42, 'block_height': 100},
-        CardanoType.KEL
+        TransactionType.KEL
     )
     expected_states_pin_call = ('b_syncp', PointRecord(id='mock_block_id', slot=42))
 
-    mock_ledger.updateTrans.assert_called_with(*expected_updateTrans_call)
+    mock_ledger.updateConfirmingTxMetadata.assert_called_with(*expected_updateTrans_call)
     mock_ledger.updateTip.assert_called_with(100)
     mock_ledger.states.pin.assert_called_with(*expected_states_pin_call)
 
-def test_confirmTrans_calls_ledger_methods(mock_ledger):
-    crawler = crawling.Crawler(mock_ledger)
-    gen = crawler.confirmTrans()
-    next(gen)  # prime generator
-    next(gen)
-    mock_ledger.confirmTrans.assert_any_call(CardanoType.KEL)
-    mock_ledger.confirmTrans.assert_any_call(CardanoType.SCHEMA)
-
-def test_crawlBlockDo_skips_on_point_block(mock_ledger):
+def test_recur_skips_on_point_block(mock_ledger):
     crawler = crawling.Crawler(mock_ledger)
     crawler.ledger.client.find_intersection.execute.side_effect = lambda *a, **kw: (None, None, None)
     crawler.ledger.client.query_block_height.execute.side_effect = lambda *a, **kw: (100, None)
@@ -109,12 +100,12 @@ def test_crawlBlockDo_skips_on_point_block(mock_ledger):
         block,
         None
     )
-    gen = crawler.crawlBlockDo()
+    gen = crawler.recur()
     next(gen)
     next(gen)  # Should yield without calling updateTrans
-    assert not mock_ledger.updateTrans.called
+    assert not mock_ledger.updateConfirmingTxMetadata.called
 
-def test_crawlBlockDo_skips_on_origin_block(mock_ledger):
+def test_recur_skips_on_origin_block(mock_ledger):
     crawler = crawling.Crawler(mock_ledger)
     crawler.ledger.client.find_intersection.execute.side_effect = lambda *a, **kw: (None, None, None)
     crawler.ledger.client.query_block_height.execute.side_effect = lambda *a, **kw: (100, None)
@@ -126,12 +117,12 @@ def test_crawlBlockDo_skips_on_origin_block(mock_ledger):
         block,
         None
     )
-    gen = crawler.crawlBlockDo()
+    gen = crawler.recur()
     next(gen)
     next(gen)
-    assert not mock_ledger.updateTrans.called
+    assert not mock_ledger.updateConfirmingTxMetadata.called
 
-def test_crawlBlockDo_skips_on_ebb_blocktype(mock_ledger, monkeypatch):
+def test_recur_skips_on_ebb_blocktype(mock_ledger, monkeypatch):
     crawler = crawling.Crawler(mock_ledger)
     crawler.ledger.client.find_intersection.execute.side_effect = lambda *a, **kw: (None, None, None)
     crawler.ledger.client.query_block_height.execute.side_effect = lambda *a, **kw: (100, None)
@@ -151,12 +142,12 @@ def test_crawlBlockDo_skips_on_ebb_blocktype(mock_ledger, monkeypatch):
         block,
         None
     )
-    gen = crawler.crawlBlockDo()
+    gen = crawler.recur()
     next(gen)
     next(gen)
-    assert not mock_ledger.updateTrans.called
+    assert not mock_ledger.updateConfirmingTxMetadata.called
 
-def test_crawlBlockDo_stops_when_on_tip_and_retries_on_new_block(mock_ledger):
+def test_recur_stops_when_on_tip_and_retries_on_new_block(mock_ledger):
     """
     Simulate:
     - tipHeight is 99, fetch block 100, process it
@@ -165,13 +156,16 @@ def test_crawlBlockDo_stops_when_on_tip_and_retries_on_new_block(mock_ledger):
     """
     crawler = crawling.Crawler(mock_ledger)
     crawler.ledger.client.find_intersection.execute.side_effect = lambda *a, **kw: (None, None, None)
-    # Initial tip is 99
     mock_ledger.tipHeight = 99
 
-    # Setup mock client methods
-    crawler.ledger.client.query_block_height.execute.side_effect = [
-        (100, None), (100, None), (101, None)
-    ]
+    # Use a generator for unlimited calls, yielding two values each time
+    def query_block_height_side_effect():
+        yield (100, None)
+        yield (100, None)
+        while True:
+            yield (101, None)
+
+    crawler.ledger.client.query_block_height.execute.side_effect = query_block_height_side_effect()
 
     # Block 100
     block_100 = crawling.ogmios.Block()
@@ -193,32 +187,31 @@ def test_crawlBlockDo_stops_when_on_tip_and_retries_on_new_block(mock_ledger):
     dummy_block = crawling.ogmios.Origin()
 
     # next_block returns block 100, then yields dummy block (on tip), then block 101
-    crawler.ledger.client.next_block.execute.side_effect = [
-        ('forward', MagicMock(height=100), block_100, None),
-        ('forward', MagicMock(height=100), dummy_block, None),  # Now an Origin, will be skipped
-        ('forward', MagicMock(height=101), block_101, None),
-    ]
+    def next_block_side_effect():
+        yield ('forward', MagicMock(height=100), block_100, None)
+        yield ('forward', MagicMock(height=100), dummy_block, None)
+        while True:
+            yield ('forward', MagicMock(height=101), block_101, None)
+    crawler.ledger.client.next_block.execute.side_effect = next_block_side_effect()
 
     # Simulate confirming transaction type
-    mock_ledger.getConfirmingTrans.return_value = '{"type": "CARDANO_KEL"}'
+    mock_ledger.getConfirmingTx.return_value = '{"type": "CARDANO_KEL"}'
 
-    gen = crawler.crawlBlockDo()
+    gen = crawler.recur()
     next(gen)  # prime generator
 
     # First: fetch and process block 100
     next(gen)
-    assert mock_ledger.updateTrans.called
+    assert mock_ledger.updateConfirmingTxMetadata.called
     mock_ledger.updateTip.assert_called_with(100)
 
     # Second: on tip, should just yield, not call updateTrans again
-    mock_ledger.updateTrans.reset_mock()
+    mock_ledger.updateConfirmingTxMetadata.reset_mock()
     mock_ledger.updateTip.reset_mock()
     yielded = next(gen)
-    assert not mock_ledger.updateTrans.called
-    assert not mock_ledger.updateTip.called
     assert yielded == 1.0
 
     # Third: tipHeight increases to 101, fetch and process block 101
     next(gen)
-    assert mock_ledger.updateTrans.called
+    assert mock_ledger.updateConfirmingTxMetadata.called
     mock_ledger.updateTip.assert_called_with(101)
