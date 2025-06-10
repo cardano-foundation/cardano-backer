@@ -14,7 +14,7 @@ class TestSchema(TestBase):
     def setup_class(cls):
         help.ogler.resetLevel(level=logging.DEBUG, globally=True)
         test_end = TestEnd()
-        cls.hby, cls.hab, cls.client, cls.ledger = test_end.make_test_end(SCHEMA_ROUTE, backering.SchemaEnd, type=cardaning.TransactionType.SCHEMA)
+        cls.hby, cls.hab, cls.client, cls.ledger = test_end.make_test_end(SCHEMA_ROUTE, backering.SchemaEnd)
 
     def test_invalid_schema_format(cls):
         schema = (b'{"$id":"EMRvS7lGxc1eDleXBkvSHkFs8vUrslRcla6UXOJdccza","$schema":"http://json'

@@ -55,6 +55,7 @@ class TestUtxos(TestBase):
             tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH - 1
 
             # Submit event
+            ledger.onTip = True
             ledger.updateTip(tipHeight - 1)
 
             selected_utxo = ledger.selectAvailableUTXOs()
@@ -187,6 +188,7 @@ class TestUtxos(TestBase):
             tipHeight = blockHeight + TRANSACTION_SECURITY_DEPTH - 1
 
             # Submit event
+            ledger.onTip = True
             ledger.updateTip(tipHeight - 1)
             cls.wait_for_updating_utxo()
             ledger.publishEvents(txType=cardaning.TransactionType.SCHEMA)

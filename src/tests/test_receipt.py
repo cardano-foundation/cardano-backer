@@ -15,7 +15,7 @@ class TestReceipt(TestBase):
     def setup_class(cls):
         help.ogler.resetLevel(level=logging.DEBUG, globally=True)
         test_end = TestEnd()
-        cls.hby, cls.hab, cls.client, cls.ledger = test_end.make_test_end("/receipts", backering.ReceiptEnd, cues=decking.Deck(), type=cardaning.TransactionType.KEL)
+        cls.hby, cls.hab, cls.client, cls.ledger = test_end.make_test_end("/receipts", backering.ReceiptEnd, cues=decking.Deck())
 
     def test_invalid_event_format(cls):
         body_data = b'{"v":"KERI10JSON000159_","t":"icp","d":"INVALID","i":"EEqgEGTZpJ0MZ_a97VwepTg4IWR9aGEfwXyV0DfJ8x6s","s":"0","kt":"1","k":["DMK1djRX6XJUr2jsCq9XcjoqwVtQyf4HhnyGf37_NiAs"],"nt":"1","n":["EJtfLdgPkiaNohGO6oRRaKEBq66HPV8KFOldSGJC4UYx"],"bt":"1","b":["BBilc4-L3tFUnfM_wJr4S4OJanAv_VmF_dJNN6vkf2Ha"],"c":[],"a":[]}'
@@ -84,6 +84,7 @@ class TestReceipt(TestBase):
                 assert queued_serder.sn == test_serder.sn
 
                 # Publish the event
+                cls.ledger.onTip = True
                 cls.ledger.publishEvents(txType=cardaning.TransactionType.KEL)
 
                 # Wait for event to be published
@@ -134,9 +135,22 @@ class TestReceipt(TestBase):
                 ]
             )
 
+            # First post to queue
             res = cls.client.simulate_post(path="/receipts", body=test_serder.raw, headers=headers)
             assert res.status_code == 200
 
+            if res.status_code == 200:
+                queued_event = cls.ledger.kelsQueued.get((test_serder.pre, test_serder.said))
+                queued_serder = serdering.SerderKERI(raw=queued_event.encode('utf-8'))
+                assert queued_serder.said == test_serder.said
+
+                cls.ledger.onTip = True
+                cls.wait_for_updating_utxo()
+                cls.ledger.publishEvents(txType=cardaning.TransactionType.KEL)
+
+            # Second post to queue
+            res = cls.client.simulate_post(path="/receipts", body=test_serder.raw, headers=headers)
+            assert res.status_code == 200
             if res.status_code == 200:
                 # Event is duplicated so It is not pushed to queue
                 queued_event = cls.ledger.kelsQueued.get((test_serder.pre, test_serder.said))

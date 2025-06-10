@@ -103,6 +103,7 @@ class TestQueueing(TestBase):
             msg_2 = serder_2.raw
 
             ledger = cardaning.Cardano(hab=hab, client=client)
+            ledger.onTip = True
             ledger.kelsQueued.pin(keys=(serder_1.pre, serder_1.said), val=msg_1)
             ledger.kelsQueued.pin(keys=(serder_2.pre, serder_2.said), val=msg_2)
 
@@ -212,6 +213,7 @@ class TestQueueing(TestBase):
             msg_2 = schemer_2.raw
 
             ledger = cardaning.Cardano(hab=hab, client=client)
+            ledger.onTip = True
             ledger.schemasQueued.pin(keys=(schemer_1.said,), val=msg_1)
             ledger.schemasQueued.pin(keys=(schemer_2.said,), val=msg_2)
 
