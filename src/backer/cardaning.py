@@ -212,8 +212,8 @@ class Cardano:
             logger.critical(f"ERROR: Submit tx: {e}")
 
             # Remove from confirming
-            confirmingTxs.rem(signedTxMetadata["id"])
             self.dbConfirmingUtxos.rem(keys=signedTxMetadata["id"])
+            confirmingTxs.rem(signedTxMetadata["id"])
 
         # Mark submitted events as published and remove from queue
         for event in eventsInBatch:
