@@ -388,7 +388,7 @@ class ReceiptEnd(doing.DoDoer):
 
             # Queue to write on-chain
             keys = (pre, serder.said)
-            if not self.queue.get(keys=keys) or self.published.get(keys=keys):
+            if not (self.queue.get(keys=keys) or self.published.get(keys=keys)):
                 evt = self.hab.db.cloneEvtMsg(pre=serder.pre, fn=0, dig=serder.said)
                 self.queue.pin(keys=(pre, serder.said), val=bytearray(evt))
 
