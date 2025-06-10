@@ -255,7 +255,7 @@ class Cardano:
                 continue
 
             # Check for timeout (not appearing - maybe fork)
-            if self.tipHeight - int(tx["tip"]) > TRANSACTION_TIMEOUT_DEPTH:
+            if self.tipHeight - int(tx["tip"]) >= TRANSACTION_TIMEOUT_DEPTH:
                 for event in tx["batch"]:
                     self._addToQueue(event.encode('utf-8'), txType)
 
