@@ -214,6 +214,7 @@ class Cardano:
             # Remove from confirming
             self.dbConfirmingUtxos.rem(keys=signedTxMetadata["id"])
             confirmingTxs.rem(signedTxMetadata["id"])
+            return
 
         # Mark submitted events as published and remove from queue
         for event in eventsInBatch:
