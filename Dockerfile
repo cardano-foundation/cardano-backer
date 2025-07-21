@@ -23,7 +23,7 @@ RUN apt update -qq && \
     apt install -y jq && \
     apt clean 
 WORKDIR $CONFIG_DIR
-RUN apt update -qq && apt install -y jq && apt clean
+RUN apt update -qq && apt install -y jq gettext-base && apt clean
 RUN ln -s /backer/scripts/start_backer.sh /usr/local/bin/cardano-backer
 RUN chmod +x /usr/local/bin/cardano*
 
