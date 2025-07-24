@@ -72,7 +72,7 @@ class Cardano:
 
         self.dbConfirmingUtxos = subing.DupSuber(db=hab.db, subkey=CardanoSuberKey.CONFIRMING_UTXOS.value)
 
-        self.states = koming.Komer(db=hab.db,
+        self.states = koming.IoSetKomer(db=hab.db,
                                    schema=PointRecord,
                                    subkey=CardanoKomerKey.BACKER_STATE_DB.value)
 
