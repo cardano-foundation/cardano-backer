@@ -42,7 +42,7 @@ class CardanoSuberKey(Enum):
 
 class CardanoKomerKey(Enum):
     BACKER_STATE_DB = 'bstt.'
-    CURRENT_SYNC_POINT = 'b_syncp'
+    CURRENT_SYNC_POINTS = 'bsc.'
 
 
 @dataclass

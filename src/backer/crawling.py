@@ -33,11 +33,11 @@ class Crawler(doing.Doer):
     def recur(self, tymth=None):
         startPoint = ogmios.Point(START_SLOT_NUMBER, START_BLOCK_HEADER_HASH) if START_SLOT_NUMBER > 0 else ogmios.Origin()
 
-        if self.ledger.states.cnt(CardanoKomerKey.CURRENT_SYNC_POINT.value) > 0:
+        if self.ledger.states.cnt(CardanoKomerKey.CURRENT_SYNC_POINTS.value) > 0:
             foundLastPoint = False
 
             while not foundLastPoint:
-                lastItem = self.ledger.states.getLast(CardanoKomerKey.CURRENT_SYNC_POINT.value)
+                lastItem = self.ledger.states.getLast(CardanoKomerKey.CURRENT_SYNC_POINTS.value)
                 startPoint = ogmios.Point(lastItem.slot, lastItem.id)
 
                 try:
@@ -51,7 +51,7 @@ class Crawler(doing.Doer):
                     logger.critical(f"[{datetime.datetime.now()}] Error finding intersection from point: {startPoint}, error: {ex}")
                     if re.search(r'["\']code["\']\s*:\s*1000', str(ex)):
                         # Remove the last item to continue from the last known point
-                        self.ledger.states.rem(CardanoKomerKey.CURRENT_SYNC_POINT.value, lastItem)
+                        self.ledger.states.rem(CardanoKomerKey.CURRENT_SYNC_POINTS.value, lastItem)
                     else:
                         raise ex
         else:
@@ -99,7 +99,7 @@ class Crawler(doing.Doer):
 
             self.ledger.confirmOrTimeoutDeepTxs(TransactionType.KEL)
             self.ledger.confirmOrTimeoutDeepTxs(TransactionType.SCHEMA)
-            self.ledger.states.add(CardanoKomerKey.CURRENT_SYNC_POINT.value, PointRecord(id=block.id, slot=block.slot))
+            self.ledger.states.add(CardanoKomerKey.CURRENT_SYNC_POINTS.value, PointRecord(id=block.id, slot=block.slot))
 
             yield self.tock
 
@@ -113,9 +113,9 @@ class Pruner(doing.Doer):
 
     def recur(self, tyme=None):
         while True:
-            while self.ledger.states.cnt(CardanoKomerKey.CURRENT_SYNC_POINT.value) > POINT_RECORD_LIMIT:
-                iter = self.ledger.states.getIter(CardanoKomerKey.CURRENT_SYNC_POINT.value)
+            while self.ledger.states.cnt(CardanoKomerKey.CURRENT_SYNC_POINTS.value) > POINT_RECORD_LIMIT:
+                iter = self.ledger.states.getIter(CardanoKomerKey.CURRENT_SYNC_POINTS.value)
                 removingItem = next(iter)
-                self.ledger.states.rem(CardanoKomerKey.CURRENT_SYNC_POINT.value, removingItem)
+                self.ledger.states.rem(CardanoKomerKey.CURRENT_SYNC_POINTS.value, removingItem)
 
             yield self.tock
