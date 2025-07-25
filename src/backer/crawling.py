@@ -6,6 +6,7 @@ backer.crawling module
 Cardano crawler to ensure any on-chain transactions reliably appear over time
 """
 import os
+import re
 import ogmios
 import ogmios.model.model_map as ogmm
 import json
@@ -48,7 +49,7 @@ class Crawler(doing.Doer):
                     self.ledger.rollbackToSlot(block.slot, txType=TransactionType.SCHEMA)
                 except ogmios.errors.ResponseError as ex:
                     logger.critical(f"[{datetime.datetime.now()}] Error finding intersection from point: {startPoint}, error: {ex}")
-                    if "No intersection found" in str(ex):
+                    if re.search(r'["\']code["\']\s*:\s*1000', str(ex)):
                         # Remove the last item to continue from the last known point
                         self.ledger.states.rem(CardanoKomerKey.CURRENT_SYNC_POINT.value, lastItem)
                     else:
