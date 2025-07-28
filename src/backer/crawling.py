@@ -65,7 +65,7 @@ class Crawler(doing.Doer):
 
             direction, tip, block, _ = self.ledger.client.next_block.execute()
 
-            if block in [ogmios.Origin()] or isinstance(block, ogmios.Point) or block.blocktype == ogmm.Types.ebb.value:
+            if block in [ogmios.Origin()] or (isinstance(block, ogmios.Block) and block.blocktype == ogmm.Types.ebb.value):
                 yield self.tock
                 continue
 
@@ -92,7 +92,7 @@ class Crawler(doing.Doer):
             else:
                 # Rollback transactions, we receipt a Point instead of a Block in backward direction
                 if isinstance(block, ogmios.Point):
-                    logger.debug(f"[{datetime.datetime.now()}] {direction}:\nblock: {block}\ntip:{tip}\n")
+                    logger.debug(f"[{datetime.datetime.now()}] \n#####{direction}:#####\nblock: {block}\ntip:{tip}\n")
                     self.ledger.updateTip(tip.height)
                     self.ledger.rollbackToSlot(block.slot, txType=TransactionType.KEL)
                     self.ledger.rollbackToSlot(block.slot, txType=TransactionType.SCHEMA)

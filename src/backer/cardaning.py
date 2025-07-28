@@ -226,6 +226,7 @@ class Cardano:
         return self.kelsConfirming.get(txId) or self.schemasConfirming.get(txId)
 
     def rollbackToSlot(self, slot, txType: TransactionType):
+        logger.debug(f"Rolling back transactions to slot {slot} for {txType.value}")
         confirmingTxs = self.kelsConfirming if txType == TransactionType.KEL else self.schemasConfirming
         for keys, tx in confirmingTxs.getItemIter():
             tx = json.loads(tx)
