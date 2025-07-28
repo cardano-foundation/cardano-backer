@@ -93,6 +93,8 @@ class Crawler(doing.Doer):
                 # Rollback transactions, we receipt a Point instead of a Block in backward direction
                 if isinstance(block, ogmios.Point):
                     logger.debug(f"[{datetime.datetime.now()}] \n#####{direction}:#####\nblock: {block}\ntip:{tip}\n")
+                    self.tock = 0.0
+                    self.ledger.onTip = False
                     self.ledger.updateTip(tip.height)
                     self.ledger.rollbackToSlot(block.slot, txType=TransactionType.KEL)
                     self.ledger.rollbackToSlot(block.slot, txType=TransactionType.SCHEMA)
