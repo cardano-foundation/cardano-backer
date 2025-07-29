@@ -2,8 +2,8 @@
 # Determine OS type
 OS_TYPE="$(uname -s)"
 case "$OS_TYPE" in
-    Linux*)   DOWNLOAD_URL="https://github.com/bloxbean/yaci-devkit/releases/download/v0.10.5/yaci-cli-0.10.5-linux-X64.zip" ;;
-    Darwin*)  DOWNLOAD_URL="https://github.com/bloxbean/yaci-devkit/releases/download/v0.10.5/yaci-cli-0.10.5-macos-ARM64.zip" ;;
+    Linux*)   DOWNLOAD_URL="https://github.com/bloxbean/yaci-devkit/releases/download/v0.11.0-beta1/yaci-cli-0.11.0-beta1-linux-X64.zip" ;;
+    Darwin*)  DOWNLOAD_URL="https://github.com/bloxbean/yaci-devkit/releases/download/v0.11.0-beta1/yaci-cli-0.11.0-beta1-macos-ARM64.zip" ;;
     *)        echo "Unsupported OS: $OS_TYPE"; exit 1 ;;
 esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,7 +33,7 @@ if [[ ! -f "$SCRIPT_DIR/$FILE" ]]; then
         exit 1
     fi
     echo "Moving $FILE to $SCRIPT_DIR..."
-    mv "$TMP_DIR/yaci-cli-0.10.5/$FILE" "$SCRIPT_DIR/" || { echo "Error: Failed to move $FILE"; exit 1; }
+    mv "$TMP_DIR/yaci-cli-0.11.0-beta1/$FILE" "$SCRIPT_DIR/" || { echo "Error: Failed to move $FILE"; exit 1; }
     chmod +x "$SCRIPT_DIR/$FILE"
     echo "Cleaning up..."
     rm -rf "$TMP_DIR"
