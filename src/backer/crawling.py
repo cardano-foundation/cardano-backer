@@ -33,22 +33,17 @@ class Crawler(doing.Doer):
     def recur(self, tymth=None):
         startPoint = ogmios.Point(START_SLOT_NUMBER, START_BLOCK_HEADER_HASH) if START_SLOT_NUMBER > 0 else ogmios.Origin()
 
-        if self.ledger.states.cnt(CardanoKomerKey.CURRENT_SYNC_POINTS.value) > 0:
-            foundLastPoint = False
-
-            while not foundLastPoint:
+        if (remainingPoints := self.ledger.states.cnt(CardanoKomerKey.CURRENT_SYNC_POINTS.value)) > 0:
+            while remainingPoints > 0:
+                remainingPoints -= 1
                 lastItem = self.ledger.states.getLast(CardanoKomerKey.CURRENT_SYNC_POINTS.value)
-                startPoint = ogmios.Point(lastItem.slot, lastItem.id)
+                checkPoint = ogmios.Point(lastItem.slot, lastItem.id)
 
                 try:
-                    block, tip, _ = self.ledger.client.find_intersection.execute([startPoint])
-                    foundLastPoint = True
-                    # Do a rollback to the found point
-                    self.ledger.updateTip(tip.height)
-                    self.ledger.rollbackToSlot(block.slot, txType=TransactionType.KEL)
-                    self.ledger.rollbackToSlot(block.slot, txType=TransactionType.SCHEMA)
+                    block, tip, _ = self.ledger.client.find_intersection.execute([checkPoint])
+                    break
                 except ogmios.errors.ResponseError as ex:
-                    logger.critical(f"[{datetime.datetime.now()}] Error finding intersection from point: {startPoint}, error: {ex}")
+                    logger.critical(f"[{datetime.datetime.now()}] Error finding intersection from point: {checkPoint}, error: {ex}")
                     if re.search(r'["\']code["\']\s*:\s*1000', str(ex)):
                         # Remove the last item to continue from the last known point
                         self.ledger.states.rem(CardanoKomerKey.CURRENT_SYNC_POINTS.value, lastItem)
