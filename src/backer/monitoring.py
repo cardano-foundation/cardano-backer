@@ -50,8 +50,9 @@ class CardanoThreadMonitor(doing.Doer):
                     ledger = cardaning.Cardano(hab=self.hab, client=client)
                     queuer = queueing.Queuer(ledger=ledger)
                     crawler = crawling.Crawler(ledger=ledger)
+                    pruner = crawling.Pruner(ledger=ledger)
 
-                    self.doist.do(doers=[crawler, queuer])
+                    self.doist.do(doers=[crawler, queuer, pruner])
             except Exception as ex:
                 logger.critical(f"Secondary controller encountered an error: {ex}", exc_info=True)
             finally:

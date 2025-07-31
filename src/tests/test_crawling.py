@@ -3,11 +3,13 @@ from unittest.mock import MagicMock
 
 import backer.crawling as crawling
 import ogmios
-from backer.cardaning import TransactionType, PointRecord
+from backer.cardaning import TransactionType, PointRecord, CardanoKomerKey
 
 class MockPoint:
     def __init__(self, *args, **kwargs):
-        pass
+        self.id = kwargs.get("id", "mock_point_id")
+        self.height = kwargs.get("height", None)
+        self.slot = kwargs.get("slot", 0)
 
 class MockBlock:
     def __init__(self, *args, **kwargs):
@@ -28,6 +30,7 @@ def mock_ledger():
     ledger.updateTrans = MagicMock()
     ledger.updateTip = MagicMock()
     ledger.rollbackBlock = MagicMock()
+    ledger.states.cnt.return_value = 0
     return ledger
 
 @pytest.fixture(autouse=True)
@@ -82,11 +85,11 @@ def test_recur_yields_and_handles_tip(mock_ledger):
         {'type': 'CARDANO_KEL', 'block_slot': 42, 'block_height': 100},
         TransactionType.KEL
     )
-    expected_states_pin_call = ('b_syncp', PointRecord(id='mock_block_id', slot=42))
+    expected_states_add_call = (CardanoKomerKey.CURRENT_SYNC_POINTS.value, PointRecord(id='mock_block_id', slot=42))
 
     mock_ledger.updateConfirmingTxMetadata.assert_called_with(*expected_updateTrans_call)
     mock_ledger.updateTip.assert_called_with(100)
-    mock_ledger.states.pin.assert_called_with(*expected_states_pin_call)
+    mock_ledger.states.add.assert_called_with(*expected_states_add_call)
 
 def test_recur_skips_on_point_block(mock_ledger):
     crawler = crawling.Crawler(mock_ledger)

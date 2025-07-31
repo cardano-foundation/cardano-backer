@@ -42,7 +42,7 @@ class CardanoSuberKey(Enum):
 
 class CardanoKomerKey(Enum):
     BACKER_STATE_DB = 'bstt.'
-    CURRENT_SYNC_POINT = 'b_syncp'
+    CURRENT_SYNC_POINTS = 'bsc.'
 
 
 @dataclass
@@ -72,7 +72,7 @@ class Cardano:
 
         self.dbConfirmingUtxos = subing.DupSuber(db=hab.db, subkey=CardanoSuberKey.CONFIRMING_UTXOS.value)
 
-        self.states = koming.Komer(db=hab.db,
+        self.states = koming.IoSetKomer(db=hab.db,
                                    schema=PointRecord,
                                    subkey=CardanoKomerKey.BACKER_STATE_DB.value)
 
@@ -226,6 +226,7 @@ class Cardano:
         return self.kelsConfirming.get(txId) or self.schemasConfirming.get(txId)
 
     def rollbackToSlot(self, slot, txType: TransactionType):
+        logger.debug(f"Rolling back transactions to slot {slot} for {txType.value}")
         confirmingTxs = self.kelsConfirming if txType == TransactionType.KEL else self.schemasConfirming
         for keys, tx in confirmingTxs.getItemIter():
             tx = json.loads(tx)

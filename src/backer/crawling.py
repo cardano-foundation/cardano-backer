@@ -6,13 +6,14 @@ backer.crawling module
 Cardano crawler to ensure any on-chain transactions reliably appear over time
 """
 import os
+import re
 import ogmios
 import ogmios.model.model_map as ogmm
 import json
 import datetime
 from hio.base import doing
 from keri import help
-from backer.cardaning import TransactionType, PointRecord, CardanoKomerKey
+from backer.cardaning import TransactionType, PointRecord, CardanoKomerKey, Cardano
 
 logger = help.ogler.getLogger()
 
@@ -31,12 +32,30 @@ class Crawler(doing.Doer):
 
     def recur(self, tymth=None):
         startPoint = ogmios.Point(START_SLOT_NUMBER, START_BLOCK_HEADER_HASH) if START_SLOT_NUMBER > 0 else ogmios.Origin()
-        lastBlock = self.ledger.states.get(CardanoKomerKey.CURRENT_SYNC_POINT.value)
 
-        if lastBlock:
-            startPoint = ogmios.Point(lastBlock.slot, lastBlock.id)
+        if self.ledger.states.cnt(CardanoKomerKey.CURRENT_SYNC_POINTS.value) > 0:
+            foundLastPoint = False
 
-        _, _, _ = self.ledger.client.find_intersection.execute([startPoint])
+            while not foundLastPoint:
+                lastItem = self.ledger.states.getLast(CardanoKomerKey.CURRENT_SYNC_POINTS.value)
+                startPoint = ogmios.Point(lastItem.slot, lastItem.id)
+
+                try:
+                    block, tip, _ = self.ledger.client.find_intersection.execute([startPoint])
+                    foundLastPoint = True
+                    # Do a rollback to the found point
+                    self.ledger.updateTip(tip.height)
+                    self.ledger.rollbackToSlot(block.slot, txType=TransactionType.KEL)
+                    self.ledger.rollbackToSlot(block.slot, txType=TransactionType.SCHEMA)
+                except ogmios.errors.ResponseError as ex:
+                    logger.critical(f"[{datetime.datetime.now()}] Error finding intersection from point: {startPoint}, error: {ex}")
+                    if re.search(r'["\']code["\']\s*:\s*1000', str(ex)):
+                        # Remove the last item to continue from the last known point
+                        self.ledger.states.rem(CardanoKomerKey.CURRENT_SYNC_POINTS.value, lastItem)
+                    else:
+                        raise ex
+        else:
+            _, _, _ = self.ledger.client.find_intersection.execute([startPoint])
 
         while True:
             nodeBlockHeight, _ = self.ledger.client.query_block_height.execute()
@@ -46,7 +65,7 @@ class Crawler(doing.Doer):
 
             direction, tip, block, _ = self.ledger.client.next_block.execute()
 
-            if block in [ogmios.Origin()] or isinstance(block, ogmios.Point) or block.blocktype == ogmm.Types.ebb.value:
+            if block in [ogmios.Origin()] or (isinstance(block, ogmios.Block) and block.blocktype == ogmm.Types.ebb.value):
                 yield self.tock
                 continue
 
@@ -73,14 +92,32 @@ class Crawler(doing.Doer):
             else:
                 # Rollback transactions, we receipt a Point instead of a Block in backward direction
                 if isinstance(block, ogmios.Point):
-                    logger.debug(f"[{datetime.datetime.now()}] {direction}:\nblock: {block}\ntip:{tip}\n")
+                    logger.debug(f"[{datetime.datetime.now()}] \n#####{direction}:#####\nblock: {block}\ntip:{tip}\n")
+                    self.tock = 0.0
+                    self.ledger.onTip = False
                     self.ledger.updateTip(tip.height)
                     self.ledger.rollbackToSlot(block.slot, txType=TransactionType.KEL)
                     self.ledger.rollbackToSlot(block.slot, txType=TransactionType.SCHEMA)
 
             self.ledger.confirmOrTimeoutDeepTxs(TransactionType.KEL)
             self.ledger.confirmOrTimeoutDeepTxs(TransactionType.SCHEMA)
+            self.ledger.states.add(CardanoKomerKey.CURRENT_SYNC_POINTS.value, PointRecord(id=block.id, slot=block.slot))
 
-            self.ledger.states.pin(CardanoKomerKey.CURRENT_SYNC_POINT.value, PointRecord(id=block.id, slot=block.slot))
+            yield self.tock
+
+POINT_RECORD_LIMIT = int(os.environ.get('POINT_RECORD_LIMIT', 2160))
+class Pruner(doing.Doer):
+
+    def __init__(self, ledger: Cardano, tock=10.0):
+        self.ledger = ledger
+        self.tock = tock
+        super(Pruner, self).__init__(tock=self.tock)
+
+    def recur(self, tyme=None):
+        while True:
+            while self.ledger.states.cnt(CardanoKomerKey.CURRENT_SYNC_POINTS.value) > POINT_RECORD_LIMIT:
+                iter = self.ledger.states.getIter(CardanoKomerKey.CURRENT_SYNC_POINTS.value)
+                removingItem = next(iter)
+                self.ledger.states.rem(CardanoKomerKey.CURRENT_SYNC_POINTS.value, removingItem)
 
             yield self.tock
