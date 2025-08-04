@@ -126,18 +126,14 @@ class Cardano:
 
             return False
 
-        # @TODO: We need more advanced UTXO selection in the future.
-        #   For now, it just selects one and assumes it'll have enough.
-        #   Deployments should fund the address with 1 or X UTXOs of sufficient size.
-
-        # Select the first utxo from spending address
+        availableUTXOs = []
         utxos = self.context.utxos(self.spending_addr)
 
         for utxo in utxos:
             if not txIsConfirming(utxo):
-                return [utxo]
+                availableUTXOs.append(utxo)
 
-        return []
+        return availableUTXOs
 
     def publishEvents(self, txType: TransactionType):
         if not self.onTip:
